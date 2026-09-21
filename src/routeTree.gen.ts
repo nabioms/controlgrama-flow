@@ -10,11 +10,23 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DiariasRouteImport } from './routes/diarias'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as PontoRouteImport } from './routes/ponto'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiariasRoute = DiariasRouteImport.update({
+  id: '/diarias',
+  path: '/diarias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PontoRoute = PontoRouteImport.update({
@@ -25,27 +37,35 @@ const PontoRoute = PontoRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/diarias': typeof DiariasRoute
+  '/financeiro': typeof FinanceiroRoute
   '/ponto': typeof PontoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/diarias': typeof DiariasRoute
+  '/financeiro': typeof FinanceiroRoute
   '/ponto': typeof PontoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/diarias': typeof DiariasRoute
+  '/financeiro': typeof FinanceiroRoute
   '/ponto': typeof PontoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/ponto'
+  fullPaths: '/' | '/diarias' | '/financeiro' | '/ponto'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ponto'
-  id: '__root__' | '/' | '/ponto'
+  to: '/' | '/diarias' | '/financeiro' | '/ponto'
+  id: '__root__' | '/' | '/diarias' | '/financeiro' | '/ponto'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DiariasRoute: typeof DiariasRoute
+  FinanceiroRoute: typeof FinanceiroRoute
   PontoRoute: typeof PontoRoute
 }
 
@@ -56,6 +76,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/diarias': {
+      id: '/diarias'
+      path: '/diarias'
+      fullPath: '/diarias'
+      preLoaderRoute: typeof DiariasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ponto': {
@@ -70,6 +104,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DiariasRoute: DiariasRoute,
+  FinanceiroRoute: FinanceiroRoute,
   PontoRoute: PontoRoute,
 }
 export const routeTree = rootRouteImport
