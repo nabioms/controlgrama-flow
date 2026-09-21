@@ -1,24 +1,201 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { AlertTriangle, ArrowRight, CalendarClock, Landmark, PiggyBank, Users } from "lucide-react";
+import { AppShell } from "@/components/AppShell";
+import { Badge, Card, ProgressBar, SectionTitle, StatCard } from "@/components/ui-kit";
+import { useStore } from "@/lib/store";
+import { contracts, workerDocuments } from "@/lib/mock-data";
+import { brl, daysUntil, formatDate, formatLongDate, toISO } from "@/lib/format";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Painel — ControlGrama" },
+      {
+        name: "description",
+        content: "Visão do dia: presença, próxima data de pagamento de diárias, contas a receber da prefeitura e saldo de caixa.",
+      },
+      { property: "og:title", content: "Painel — ControlGrama" },
+      { property: "og:description", content: "Equipe, ponto, diárias e financeiro da sua operação de roçagem." },
+    ],
+  }),
+  component: Dashboard,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
-function Index() {
+function Dashboard() {
+  const { workers, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods } = useStore();
+  const today = toISO(new Date());
+  const month = today.slice(0, 7);
+
+  const active = workers.filter((w) => w.status === "ativo");
+  const diaristas = active.filter((w) => w.employment_type === "diarista");
+  const clt = active.filter((w) => w.employment_type === "contratado");
+
+  const dayRows = attendance.filter((a) => a.date === today);
+  const presentToday = dayRows.filter((a) => a.status === "presente").length;
+
+  const openPeriod = paymentPeriods.find((p) => p.pay_date === nextPayDate.date) ?? paymentPeriods[1];
+  const estimated = diaristas.reduce((sum, w) => {
+    const days = attendance.filter(
+      (a) =>
+        a.worker_id === w.id &&
+        a.status === "presente" &&
+        a.date >= openPeriod.start_date &&
+        a.date <= openPeriod.end_date,
+    ).length;
+    return sum + days * (w.daily_rate ?? 0);
+  }, 0);
+
+  const openReceivables = receivables.filter((r) => r.status === "pendente");
+  const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
+
+  const docAlerts = workerDocuments
+    .filter((d) => d.expires_at && daysUntil(d.expires_at) <= 45)
+    .map((d) => ({
+      ...d,
+      worker: workers.find((w) => w.id === d.worker_id)?.full_name ?? "—",
+      days: daysUntil(d.expires_at!),
+    }));
+
+  const vacationAlerts = active
+    .filter((w) => w.vacation && daysUntil(w.vacation.due_date) <= 60)
+    .map((w) => ({ name: w.full_name, date: w.vacation!.due_date }));
+
+  const recurrentAbsences = active
+    .map((w) => ({
+      name: w.full_name,
+      count: attendance.filter((a) => a.worker_id === w.id && a.status === "falta" && a.date.startsWith(month)).length,
+    }))
+    .filter((r) => r.count >= 2);
+
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
+    <AppShell title="Painel geral" subtitle={formatLongDate(today)}>
+      <div className="mb-4 grid grid-cols-2 gap-2.5">
+        <StatCard
+          label="Equipe ativa"
+          value={String(active.length)}
+          sub={`${diaristas.length} diaristas · ${clt.length} CLT`}
+          tone="primary"
+          icon={<Users className="size-4" />}
+        />
+        <StatCard
+          label="Presença hoje"
+          value={`${presentToday}/${active.length}`}
+          sub={dayRows.length ? "Chamada iniciada" : "Chamada não feita"}
+          tone={dayRows.length ? "success" : "warning"}
+          icon={<CalendarClock className="size-4" />}
+        />
+        <StatCard
+          label="Saldo de caixa"
+          value={brl(cashBalance)}
+          sub="Saldo real consolidado"
+          tone="success"
+          icon={<PiggyBank className="size-4" />}
+        />
+        <StatCard
+          label="A receber (prefeitura)"
+          value={brl(openReceivables.reduce((s, r) => s + r.expected_amount, 0))}
+          sub={`${openReceivables.length} medições em aberto`}
+          tone="info"
+          icon={<Landmark className="size-4" />}
+        />
+      </div>
+
+      <Card className="mb-4 grass-gradient border-none">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider opacity-80">
+              Próximo pagamento de diárias
+            </p>
+            <p className="font-display mt-1 text-2xl font-semibold">{brl(estimated)}</p>
+            <p className="mt-0.5 text-xs opacity-85">
+              {nextPayDate.label} · {formatDate(nextPayDate.date)}
+            </p>
+          </div>
+          <div className="rounded-2xl bg-white/15 px-3 py-2 text-center">
+            <p className="font-display text-2xl font-semibold">{nextPayDate.days}</p>
+            <p className="text-[10px] font-semibold uppercase">dias</p>
+          </div>
+        </div>
+        <div className="mt-3">
+          <ProgressBar value={100 - Math.min(100, nextPayDate.days * 6)} />
+        </div>
+        <Link to="/diarias" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold">
+          Abrir fechamento <ArrowRight className="size-3.5" />
+        </Link>
+      </Card>
+
+      <SectionTitle title="Contas a pagar do mês" hint={`${monthPayables.length} em aberto`} />
+      <div className="mb-5 space-y-2">
+        {monthPayables.slice(0, 4).map((p) => (
+          <div key={p.id} className="card-surface flex items-center justify-between p-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{p.description}</p>
+              <p className="text-xs text-muted-foreground">vence {formatDate(p.due_date)}</p>
+            </div>
+            <span className="text-sm font-semibold">{brl(p.amount)}</span>
+          </div>
+        ))}
+      </div>
+
+      <SectionTitle title="Alertas" hint="Documentos, faltas e prazos" />
+      <div className="space-y-2">
+        {docAlerts.map((d) => (
+          <div key={d.id} className="card-surface flex items-start gap-3 p-3">
+            <AlertTriangle className="mt-0.5 size-4 text-warning" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold">
+                {d.kind.toUpperCase().replace("_", " ")} de {d.worker}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {d.days < 0 ? "vencido" : `vence em ${d.days} dias`} · {formatDate(d.expires_at)}
+              </p>
+            </div>
+            <Badge tone={d.days < 0 ? "danger" : "warning"}>{d.days < 0 ? "vencido" : "atenção"}</Badge>
+          </div>
+        ))}
+        {vacationAlerts.map((v) => (
+          <div key={v.name} className="card-surface flex items-center gap-3 p-3">
+            <CalendarClock className="size-4 text-info" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold">Férias de {v.name}</p>
+              <p className="text-xs text-muted-foreground">limite {formatDate(v.date)}</p>
+            </div>
+            <Badge tone="info">férias</Badge>
+          </div>
+        ))}
+        {recurrentAbsences.map((r) => (
+          <div key={r.name} className="card-surface flex items-center gap-3 p-3">
+            <AlertTriangle className="size-4 text-destructive" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold">{r.name}</p>
+              <p className="text-xs text-muted-foreground">{r.count} faltas neste mês</p>
+            </div>
+            <Badge tone="danger">faltas</Badge>
+          </div>
+        ))}
+      </div>
+
+      <SectionTitle
+        title="Contratos vigentes"
+        hint="Rentabilidade por frente de serviço no financeiro"
+        action={
+          <Link to="/financeiro" className="text-xs font-semibold text-primary">
+            Ver financeiro
+          </Link>
+        }
       />
-    </div>
+      <div className="mt-3 space-y-2">
+        {contracts.map((c) => (
+          <div key={c.id} className="card-surface p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">{c.number}</p>
+              <Badge tone="primary">{c.status}</Badge>
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">{c.description}</p>
+            <p className="mt-1 text-xs font-semibold">{brl(c.total_value)} / 12 meses</p>
+          </div>
+        ))}
+      </div>
+    </AppShell>
   );
 }
