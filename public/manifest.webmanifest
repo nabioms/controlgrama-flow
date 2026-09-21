@@ -1,0 +1,12 @@
+{
+  "name": "ControlGrama",
+  "short_name": "ControlGrama",
+  "description": "Gestão de ponto, RH, diárias e financeiro para serviços de roçagem.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1a12",
+  "theme_color": "#1f7a3d",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" }
+  ]
+}
