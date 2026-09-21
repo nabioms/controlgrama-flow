@@ -174,7 +174,7 @@ function buildAttendance(): Attendance[] {
     workers.forEach((w, wi) => {
       if (w.status === "desligado") return;
       const seed = (back * 7 + wi * 3) % 10;
-      const status = back % 6 === 0 && seed > 7 ? attendancePattern[seed] : seed > 8 ? "falta" : "presente";
+      const status = back % 6 === 0 && seed > 7 ? attendancePattern[seed]! : seed > 8 ? "falta" : "presente";
       rows.push({
         id: `at-${w.id}-${toISO(d)}`,
         worker_id: w.id,

@@ -62,7 +62,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       { date: twentieth, label: "Dia 20 — adiantamento" },
       { date: nextFifth, label: "5º dia útil — fechamento" },
     ];
-    const next = candidates.find((c) => daysUntil(c.date, today) >= 0) ?? candidates[2];
+    const next = candidates.find((c) => daysUntil(c.date, today) >= 0) ?? candidates[2]!;
 
     const paidIn = receivables.filter((r) => r.status === "recebido").reduce((s, r) => s + r.expected_amount, 0);
     const paidOut = payables.filter((p) => p.status === "pago").reduce((s, p) => s + p.amount, 0);
@@ -88,7 +88,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           };
           if (idx === -1) return [...prev, row];
           const copy = [...prev];
-          copy[idx] = { ...copy[idx], status, notes, contract_id: contractId };
+          copy[idx] = { ...row };
           return copy;
         }),
       paymentPeriods,

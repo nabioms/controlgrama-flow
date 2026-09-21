@@ -33,7 +33,7 @@ function Dashboard() {
   const dayRows = attendance.filter((a) => a.date === today);
   const presentToday = dayRows.filter((a) => a.status === "presente").length;
 
-  const openPeriod = paymentPeriods.find((p) => p.pay_date === nextPayDate.date) ?? paymentPeriods[1];
+  const openPeriod = paymentPeriods.find((p) => p.pay_date === nextPayDate.date) ?? paymentPeriods[1]!;
   const estimated = diaristas.reduce((sum, w) => {
     const days = attendance.filter(
       (a) =>

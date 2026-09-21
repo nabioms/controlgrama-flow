@@ -26,7 +26,7 @@ const methods: PaymentMethod[] = ["pix", "dinheiro", "transferencia"];
 
 function DiariasPage() {
   const { paymentPeriods, payments, workers, closePeriod, markPaymentPaid, attendance } = useStore();
-  const [periodId, setPeriodId] = useState(paymentPeriods[1].id);
+  const [periodId, setPeriodId] = useState(paymentPeriods[1]!.id);
   const [method, setMethod] = useState<PaymentMethod>("pix");
 
   const period = paymentPeriods.find((p) => p.id === periodId)!;
