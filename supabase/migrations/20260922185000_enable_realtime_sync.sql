@@ -1,0 +1,20 @@
+alter publication supabase_realtime
+add table
+  public.attendance,
+  public.cash_settings,
+  public.contracts,
+  public.expense_categories,
+  public.invoices,
+  public.payables,
+  public.payment_periods,
+  public.payments,
+  public.receivables,
+  public.service_order_items,
+  public.service_order_workers,
+  public.service_orders,
+  public.service_types,
+  public.team_members,
+  public.teams,
+  public.worker_documents,
+  public.worker_events,
+  public.workers;
