@@ -16,6 +16,8 @@ interface Store {
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
   addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
+  updateServiceOrder:(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
+  deleteServiceOrder:(id:string)=>Promise<void>;
   finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>Promise<void>;
 }
 const StoreContext=createContext<Store|null>(null);
@@ -137,6 +139,20 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    if(teamError){await supabase.from("service_order_items").delete().eq("service_order_id",data.id);await supabase.from("service_orders").delete().eq("id",data.id);throw teamError;}
    await refresh();
  },[serviceTypes,teams]);
+ const updateServiceOrder=useCallback(async(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>{
+   const {error}=await supabase.rpc("update_service_order",{
+     p_service_order_id:id,p_service_date:input.service_date,p_contract_id:input.contract_id||null,
+     p_team_id:input.team_id,p_notes:input.notes||null,
+     p_items:(input.services||[]).map(x=>({service_type_id:x.service_type_id,planned_quantity:Number(x.planned_quantity)})),
+   });
+   if(error)throw error;
+   await refresh();
+ },[refresh]);
+ const deleteServiceOrder=useCallback(async(id:string)=>{
+   const {error}=await supabase.rpc("delete_service_order",{p_service_order_id:id});
+   if(error)throw error;
+   await refresh();
+ },[refresh]);
  const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>{
    const order=serviceOrders.find(o=>o.id===id); if(!order)throw new Error("O.S. não encontrada.");
    const itemRows=order.items||[];
@@ -157,7 +173,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — fechamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — fechamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
  const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,finalizeServiceOrder,next.date,next.label]);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}
