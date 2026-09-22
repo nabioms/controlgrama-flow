@@ -195,3 +195,39 @@ export interface CashFlowMonth {
   inflow: number;
   outflow: number;
 }
+
+
+/* ------------------------- service production ------------------------ */
+
+export type ServiceUnit = "m2" | "km" | "hora" | "unidade";
+export type ServiceOrderStatus = "aberta" | "realizada" | "nao_realizada";
+
+export interface ServiceType {
+  id: UUID;
+  name: string;
+  unit: ServiceUnit;
+  unit_price: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface ServiceOrder {
+  id: UUID;
+  order_number: number;
+  service_date: ISODate;
+  service_type_id: UUID;
+  contract_id: UUID | null;
+  planned_quantity: number;
+  realized_quantity: number | null;
+  unit_price: number;
+  planned_amount: number;
+  realized_amount: number;
+  status: ServiceOrderStatus;
+  notes: string | null;
+  created_by: UUID | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  service_type?: ServiceType;
+  contract?: Contract | null;
+}
