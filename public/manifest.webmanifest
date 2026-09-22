@@ -4,9 +4,9 @@
   "description": "Gestão de ponto, RH, diárias e financeiro para serviços de roçagem.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f1a12",
-  "theme_color": "#1f7a3d",
+  "background_color": "#05090A",
+  "theme_color": "#69E52D",
   "icons": [
-    { "src": "/favicon.ico", "sizes": "48x48", "type": "image/x-icon" }
+    { "src": "/controlgrama-mark.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }
