@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, Minus, Plus, Settings2, Trash2, UsersRound, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, Minus, Pencil, Plus, Settings2, Trash2, UsersRound, XCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -14,7 +14,7 @@ const unitLabel: Record<ServiceUnit, string> = { m2: "m²", km: "km", hora: "hor
 type DraftService = { service_type_id: string; planned_quantity: string };
 
 function ServiceOrdersPage() {
-  const { serviceTypes, serviceOrders, contracts, teams, receivables, addServiceType, updateServiceType, addServiceOrder, finalizeServiceOrder } = useStore();
+  const { serviceTypes, serviceOrders, contracts, teams, receivables, addServiceType, updateServiceType, addServiceOrder, updateServiceOrder, deleteServiceOrder, finalizeServiceOrder } = useStore();
   const today = toISO(new Date());
 
   const [date, setDate] = useState(today);
@@ -34,6 +34,13 @@ function ServiceOrdersPage() {
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState<string | null>(null);
   const [realizedInputs, setRealizedInputs] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editDate, setEditDate] = useState(today);
+  const [editContractId, setEditContractId] = useState("");
+  const [editTeamId, setEditTeamId] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editServices, setEditServices] = useState<DraftService[]>([]);
+  const [editSaving, setEditSaving] = useState(false);
 
   const activeTypes = serviceTypes.filter((x) => x.active);
   const activeTeams = teams.filter((x) => x.active);
@@ -118,6 +125,62 @@ function ServiceOrdersPage() {
     setRealizedInputs(Object.fromEntries(items.map((item) => [item.id, String(item.planned_quantity)])));
     setFinishing(orderId);
     setError("");
+  }
+
+  function openEdit(orderId: string) {
+    const order = serviceOrders.find((o) => o.id === orderId);
+    if (!order) return;
+    const items = order.items || [];
+    setEditing(orderId);
+    setEditDate(order.service_date);
+    setEditContractId(order.contract_id || "");
+    setEditTeamId(order.team_id || "");
+    setEditNotes(order.notes || "");
+    setEditServices(items.length
+      ? items.map((item) => ({ service_type_id: item.service_type_id, planned_quantity: String(item.planned_quantity) }))
+      : [{ service_type_id: order.service_type_id, planned_quantity: String(order.planned_quantity) }]);
+    setError("");
+  }
+
+  async function saveEdit() {
+    if (!editing) return;
+    const order = serviceOrders.find((o) => o.id === editing);
+    if (!order) return;
+    setEditSaving(true);
+    setError("");
+    try {
+      const valid = editServices
+        .map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity) }))
+        .filter((s) => s.service_type_id && s.planned_quantity > 0);
+      if (order.status !== "realizada" && !valid.length) throw new Error("Adicione pelo menos um serviço com quantidade maior que zero.");
+      await updateServiceOrder(editing, {
+        service_date: editDate,
+        contract_id: editContractId || null,
+        team_id: editTeamId,
+        notes: editNotes || null,
+        services: valid,
+      });
+      setEditing(null);
+    } catch (e: any) {
+      setError(e?.message || "Não foi possível salvar a O.S.");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function removeOrder(orderId: string) {
+    const order = serviceOrders.find((o) => o.id === orderId);
+    if (!order) return;
+    const confirmed = window.confirm(
+      `Apagar a O.S. #${order.order_number}? Essa ação também removerá o lançamento correspondente em Financeiro, se ele ainda estiver pendente.`
+    );
+    if (!confirmed) return;
+    setError("");
+    try {
+      await deleteServiceOrder(orderId);
+    } catch (e: any) {
+      setError(e?.message || "Não foi possível apagar a O.S.");
+    }
   }
 
   async function finish(status: "realizada" | "nao_realizada") {
@@ -245,12 +308,78 @@ function ServiceOrdersPage() {
                   </div>
                 );
               })() : null}
-              {o.status === "aberta" && <div className="mt-3 grid grid-cols-2 gap-2"><Button onClick={() => openFinish(o.id)}><CheckCircle2 className="size-4" /> OK — realizada</Button><Button variant="outline" onClick={() => { setFinishing(o.id); setRealizedInputs({}); }}><XCircle className="size-4" /> Não OK</Button></div>}
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <Button variant="outline" onClick={() => openEdit(o.id)}><Pencil className="size-4" /> Editar</Button>
+                <Button variant="outline" onClick={() => removeOrder(o.id)}><Trash2 className="size-4" /> Apagar</Button>
+                {o.status === "aberta" && <>
+                  <Button onClick={() => openFinish(o.id)}><CheckCircle2 className="size-4" /> OK — realizada</Button>
+                  <Button variant="outline" onClick={() => { setFinishing(o.id); setRealizedInputs({}); }}><XCircle className="size-4" /> Não OK</Button>
+                </>}
+              </div>
             </Card>
           );
         })}
         {!filteredOrders.length && <EmptyState title="Nenhuma O.S. encontrada" description="Altere o mês ou os filtros para consultar outros registros." />}
       </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center">
+          <Card className="max-h-[90vh] w-full max-w-xl overflow-auto p-4">
+            {(() => {
+              const order = serviceOrders.find((o) => o.id === editing);
+              if (!order) return null;
+              const lockedServices = order.status === "realizada";
+              return (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-semibold">Editar O.S. #{order.order_number}</p>
+                      <p className="text-xs text-muted-foreground">As alterações serão refletidas no Financeiro quando houver lançamento da O.S.</p>
+                    </div>
+                    <button className="rounded-lg p-2 hover:bg-muted" onClick={() => setEditing(null)} aria-label="Fechar">×</button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-semibold">Data<input className="input mt-1" type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} /></label>
+                    <label className="text-xs font-semibold">Equipe<select className="input mt-1" value={editTeamId} onChange={(e) => setEditTeamId(e.target.value)}>
+                      <option value="">Selecione...</option>{activeTeams.map((t) => <option key={t.id} value={t.id}>{t.name}{t.foreman ? ` — Enc.: ${t.foreman.full_name}` : ""}</option>)}
+                    </select></label>
+                    <label className="text-xs font-semibold sm:col-span-2">Contrato (opcional)<select className="input mt-1" value={editContractId} onChange={(e) => setEditContractId(e.target.value)}>
+                      <option value="">Sem contrato</option>{contracts.filter((c) => c.status === "vigente").map((c) => <option key={c.id} value={c.id}>{c.number} — {c.agency}</option>)}
+                    </select></label>
+                  </div>
+
+                  {lockedServices ? (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
+                      <strong>O.S. realizada:</strong> os serviços e o valor realizado ficam protegidos nesta edição. Você pode alterar data, contrato, equipe e observação sem mudar o valor já realizado.
+                    </div>
+                  ) : (
+                    <div className="mt-4 rounded-xl border p-3">
+                      <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold">Serviços</p><Button variant="outline" onClick={() => setEditServices((rows) => [...rows, { service_type_id: "", planned_quantity: "" }])}><Plus className="size-4" /> Serviço</Button></div>
+                      <div className="space-y-2">
+                        {editServices.map((row, index) => {
+                          const type = activeTypes.find((x) => x.id === row.service_type_id);
+                          return <div key={index} className="grid gap-2 sm:grid-cols-[1fr_150px_auto]">
+                            <select className="input" value={row.service_type_id} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, service_type_id: e.target.value } : x))}>
+                              <option value="">Selecione...</option>{activeTypes.map((t) => <option key={t.id} value={t.id}>{t.name} — {brl(Number(t.unit_price))}/{unitLabel[t.unit]}</option>)}
+                            </select>
+                            <input className="input" type="number" min="0" step="0.01" value={row.planned_quantity} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value } : x))} placeholder={type ? unitLabel[type.unit] : "Quantidade"} />
+                            <Button variant="outline" disabled={editServices.length === 1} onClick={() => setEditServices((rows) => rows.filter((_, i) => i !== index))}><Trash2 className="size-4" /></Button>
+                          </div>;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <label className="mt-3 block text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} /></label>
+                  {error && <p className="mt-2 text-xs font-semibold text-destructive">{error}</p>}
+                  <div className="mt-4 grid grid-cols-2 gap-2"><Button disabled={editSaving || !editTeamId} onClick={saveEdit}>{editSaving ? "Salvando..." : "Salvar alterações"}</Button><Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button></div>
+                </>
+              );
+            })()}
+          </Card>
+        </div>
+      )}
 
       {finishing && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-3 sm:items-center">
