@@ -28,11 +28,14 @@ function Dashboard() {
   const closureDate = (() => { const d = new Date(`${nextPayDate.date}T12:00:00`); d.setDate(d.getDate() - 1); return toISO(d); })();
 
   const active = workers.filter((w) => w.status === "ativo");
+  const activeWorkerIds = new Set(active.map((w) => w.id));
   const diaristas = active.filter((w) => w.employment_type === "diarista");
   const clt = active.filter((w) => w.employment_type === "contratado");
   const activeTeams = teams.filter((t) => t.active);
 
-  const dayRows = attendance.filter((a) => a.date === today);
+  // Presença do painel considera somente trabalhadores atualmente ativos.
+  // Registros antigos de funcionários desligados não devem aparecer na chamada de hoje.
+  const dayRows = attendance.filter((a) => a.date === today && activeWorkerIds.has(a.worker_id));
   const presentToday = dayRows.filter((a) => a.status === "presente").length;
 
   const nextPaymentStart = (() => {
