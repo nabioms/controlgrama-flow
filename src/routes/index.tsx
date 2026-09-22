@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, CalendarClock, Landmark, PiggyBank, Users } 
 import { AppShell } from "@/components/AppShell";
 import { Badge, Card, ProgressBar, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { contracts, workerDocuments } from "@/lib/mock-data";
+
 import { brl, daysUntil, formatDate, formatLongDate, toISO } from "@/lib/format";
 
 export const Route = createFileRoute("/")({
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { workers, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods } = useStore();
+  const { workers, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
 
