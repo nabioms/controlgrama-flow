@@ -40,6 +40,9 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Configure Android deep link
+        run: node scripts/patch-android-manifest.mjs
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug
