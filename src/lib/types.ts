@@ -66,7 +66,7 @@ export interface PaymentPeriod { id: UUID; label: string; cycle: PaymentCycle; s
 export interface Payment { id: UUID; period_id: UUID; worker_id: UUID; worked_days: number; daily_rate: number | null; gross_amount: number; status: PaymentStatus; paid_at: ISODate | null; method: PaymentMethod | null; receipt_url: string | null; }
 
 export interface Contract { id: UUID; number: string; agency: string; description: string; total_value: number; start_date: ISODate; end_date: ISODate; status: "vigente" | "encerrado"; }
-export interface Receivable { id: UUID; contract_id: UUID; reference_period: string; expected_amount: number; expected_date: ISODate; status: "pendente" | "recebido"; received_at: ISODate | null; commitment_note: string | null; }
+export interface Receivable { id: UUID; contract_id: UUID | null; service_order_id: UUID | null; reference_period: string; expected_amount: number; expected_date: ISODate; status: "pendente" | "recebido"; received_at: ISODate | null; commitment_note: string | null; }
 export type ExpenseCategoryKey = "combustivel" | "manutencao" | "mao_de_obra" | "epi" | "impostos" | "administrativo";
 export interface ExpenseCategory { key: ExpenseCategoryKey; label: string; }
 export interface Payable { id: UUID; description: string; category: ExpenseCategoryKey; supplier: string | null; amount: number; due_date: ISODate; status: "pendente" | "pago"; paid_at: ISODate | null; contract_id: UUID | null; payment_period_id: UUID | null; }
