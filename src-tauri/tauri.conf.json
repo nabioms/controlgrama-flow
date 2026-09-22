@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ControlGrama",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "br.com.controlgrama.app",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -28,7 +28,17 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico"
+      }
+    },
     "category": "Business",
     "shortDescription": "Gestão de serviços, equipes, diárias e financeiro",
     "longDescription": "ControlGrama — gestão de serviços, equipes, diárias, ordens de serviço e financeiro."
