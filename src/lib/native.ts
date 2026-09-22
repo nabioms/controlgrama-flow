@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { Camera, CameraResultType } from "@capacitor/camera";
+import { Camera } from "@capacitor/camera";
 import { Geolocation } from "@capacitor/geolocation";
 import { LocalNotifications } from "@capacitor/local-notifications";
 
@@ -13,7 +13,6 @@ export async function takeNativePhoto() {
 
   const photo = await Camera.takePhoto({
     quality: 90,
-    cameraDirection: "rear",
   });
 
   return photo;
