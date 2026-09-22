@@ -28,7 +28,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["../public/favicon.ico"],
+    "icon": ["icons/icon.ico"],
     "category": "Business",
     "shortDescription": "Gestão de serviços, equipes, diárias e financeiro",
     "longDescription": "ControlGrama — gestão de serviços, equipes, diárias, ordens de serviço e financeiro."
