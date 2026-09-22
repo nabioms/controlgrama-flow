@@ -33,17 +33,20 @@ function Dashboard() {
   const dayRows = attendance.filter((a) => a.date === today);
   const presentToday = dayRows.filter((a) => a.status === "presente").length;
 
-  const openPeriod = paymentPeriods.find((p) => p.pay_date === nextPayDate.date) ?? paymentPeriods[1]!;
-  const estimated = diaristas.reduce((sum, w) => {
-    const days = attendance.filter(
-      (a) =>
-        a.worker_id === w.id &&
-        a.status === "presente" &&
-        a.date >= openPeriod.start_date &&
-        a.date <= openPeriod.end_date,
-    ).length;
-    return sum + days * (w.daily_rate ?? 0);
-  }, 0);
+  const openPeriod =
+    paymentPeriods.find((p) => p.pay_date === nextPayDate.date) ?? paymentPeriods[1] ?? paymentPeriods[0] ?? null;
+  const estimated = openPeriod
+    ? diaristas.reduce((sum, w) => {
+        const days = attendance.filter(
+          (a) =>
+            a.worker_id === w.id &&
+            a.status === "presente" &&
+            a.date >= openPeriod.start_date &&
+            a.date <= openPeriod.end_date,
+        ).length;
+        return sum + days * (w.daily_rate ?? 0);
+      }, 0)
+    : 0;
 
   const openReceivables = receivables.filter((r) => r.status === "pendente");
   const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
