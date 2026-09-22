@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useState } from "react";
 import { ChevronDown, ChevronRight, Plus, UserPlus, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -35,6 +35,13 @@ function EquipePage() {
   const [teamForm, setTeamForm] = useState({ name: "", foremanWorkerId: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // /equipe is the parent route. When a worker ID is present, render the child detail route
+  // instead of leaving the parent list mounted over it.
+  const location = useLocation();
+  if (location.pathname !== "/equipe") {
+    return <Outlet />;
+  }
 
   const list = workers.filter((w) => filter === "todos" || w.employment_type === filter);
   const foremen = workers.filter((w) => w.status !== "desligado" && w.job_role === "encarregado");
