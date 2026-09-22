@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Check, CircleSlash, FileHeart, ShieldCheck } from "lucide-react";
+import { Check, CircleSlash, FileHeart, ShieldCheck, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, SectionTitle, Avatar } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -31,7 +31,7 @@ const toneFor = (s?: AttendanceStatus) =>
   s === "presente" ? "success" : s === "falta" ? "danger" : s === "atestado" ? "info" : s === "falta_justificada" ? "warning" : "neutral";
 
 function PontoPage() {
-  const { workers, attendance, setAttendanceStatus, contracts } = useStore();
+  const { workers, attendance, setAttendanceStatus, deleteAttendance, contracts } = useStore();
   const [date, setDate] = useState("");
 
   useEffect(() => {
@@ -42,6 +42,7 @@ function PontoPage() {
   const [contractId, setContractId] = useState<string>("");
   const [notes, setNotes] = useState("Frente Zona Norte");
   const [tab, setTab] = useState<"chamada" | "resumo">("chamada");
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const active = workers.filter((w) => w.status !== "desligado");
   const dayRows = useMemo(
@@ -162,18 +163,41 @@ function PontoPage() {
                     {options.map(({ key, label, icon: Icon }) => (
                       <button
                         key={key}
-                        onClick={() => setAttendanceStatus(w.id, date, key, notes, contractId, key === "presente" ? 1 : 0)}
-                        className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[10px] font-semibold transition-colors ${
-                          current === key
-                            ? "border-primary bg-primary-soft text-primary-deep"
-                            : "border-border text-muted-foreground"
-                        }`}
+                        onClick={async () => {
+                          setActionError(null);
+                          try {
+                            await setAttendanceStatus(w.id, date, key, notes, contractId, key === "presente" ? 1 : 0);
+                          } catch (error) {
+                            setActionError(error instanceof Error ? error.message : "Não foi possível salvar a marcação.");
+                          }
+                        }}
+                        className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[10px] font-semibold transition-colors ${current === key ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}
                       >
                         <Icon className="size-4" />
                         {label}
                       </button>
                     ))}
                   </div>
+                  {row ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setActionError(null);
+                        try {
+                          await deleteAttendance(row.id);
+                        } catch (error) {
+                          setActionError(error instanceof Error ? error.message : "Não foi possível excluir a marcação.");
+                        }
+                      }}
+                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/5"
+                    >
+                      <Trash2 className="size-4" />
+                      Excluir marcação
+                    </button>
+                  ) : null}
+                  {actionError ? (
+                    <p className="mt-2 text-[11px] font-medium text-destructive">{actionError}</p>
+                  ) : null}
                   {isDiarista && current === "presente" ? (
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       <button
