@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, CircleSlash, FileHeart, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, SectionTitle, Avatar } from "@/components/ui-kit";
@@ -32,7 +32,13 @@ const toneFor = (s?: AttendanceStatus) =>
 
 function PontoPage() {
   const { workers, attendance, setAttendanceStatus, contracts } = useStore();
-  const [date, setDate] = useState(toISO(new Date()));
+  const [date, setDate] = useState("");
+
+  useEffect(() => {
+    // Resolve the default date in the browser so SSR does not use the server timezone (UTC).
+    const now = new Date();
+    setDate(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`);
+  }, []);
   const [contractId, setContractId] = useState<string>("");
   const [notes, setNotes] = useState("Frente Zona Norte");
   const [tab, setTab] = useState<"chamada" | "resumo">("chamada");
