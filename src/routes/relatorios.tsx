@@ -4,7 +4,7 @@ import { Download, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, Field, Input, SectionTitle, Select } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { contracts, expenseCategories } from "@/lib/mock-data";
+
 import { brl, formatDate, toISO } from "@/lib/format";
 
 export const Route = createFileRoute("/relatorios")({
@@ -34,7 +34,7 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
 }
 
 function RelatoriosPage() {
-  const { workers, attendance, payments, payables, receivables } = useStore();
+  const { workers, attendance, payments, payables, receivables, contracts, expenseCategories } = useStore();
   const today = toISO(new Date());
   const [from, setFrom] = useState(today.slice(0, 8) + "01");
   const [to, setTo] = useState(today);
