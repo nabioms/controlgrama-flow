@@ -11,6 +11,15 @@ export const Route = createFileRoute("/os")({ component: ServiceOrdersPage });
 
 const unitLabel: Record<ServiceUnit, string> = { m2: "m²", km: "km", hora: "hora", unidade: "unidade" };
 
+const quantityInputClass = "h-12 w-full rounded-xl border border-border bg-background px-3 text-base font-semibold text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/25";
+
+function parseQuantity(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  if (trimmed.includes(",")) return Number(trimmed.replace(/./g, "").replace(",", "."));
+  return Number(trimmed);
+}
+
 type DraftService = { service_type_id: string; planned_quantity: string; item_id?: string };
 
 function ServiceOrdersPage() {
