@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { LogIn, Loader2, Sprout } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { App } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 import type { User } from "@supabase/supabase-js";
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -17,8 +19,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const finishConfirmation = async () => {
-      const hash = window.location.hash;
+    const finishConfirmation = async (incomingUrl?: string) => {
+      const hash = incomingUrl
+        ? new URL(incomingUrl).hash
+        : window.location.hash;
       const isConfirmationReturn =
         hash.includes("access_token=") ||
         hash.includes("type=signup") ||
@@ -27,7 +31,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
       if (isConfirmationReturn) {
         handlingConfirmation.current = true;
         await supabase.auth.signOut();
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        if (!incomingUrl) {
+          window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+        }
         if (mounted) {
           setUser(null);
           setSignup(false);
@@ -47,6 +53,15 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     finishConfirmation();
 
+    let appUrlListener: { remove: () => Promise<void> } | null = null;
+    if (Capacitor.isNativePlatform()) {
+      App.addListener("appUrlOpen", ({ url }) => {
+        void finishConfirmation(url);
+      }).then((handle) => {
+        appUrlListener = handle;
+      });
+    }
+
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted && !handlingConfirmation.current) {
         setUser(session?.user ?? null);
@@ -56,6 +71,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return () => {
       mounted = false;
       data.subscription.unsubscribe();
+      if (appUrlListener) {
+        void appUrlListener.remove();
+      }
     };
   }, []);
 
@@ -70,7 +88,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           password,
           options: {
             data: { full_name: name.trim() },
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: Capacitor.isNativePlatform()\n              ? "controlgrama://auth/callback"\n              : window.location.origin,
           },
         })
       : await supabase.auth.signInWithPassword({
