@@ -107,6 +107,7 @@ function DiariasPage() {
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -320,7 +321,7 @@ function DiariasPage() {
                 <button
                   key={iso}
                   type="button"
-                  onClick={() => setEditingDate(iso)}
+                  onClick={() => { setEditingDate(iso); setDeleteError(null); }}
                   className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
                       ? "border-primary bg-primary-soft"
@@ -366,7 +367,7 @@ function DiariasPage() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setEditingDate(null)}
+                      onClick={() => { setEditingDate(null); setDeleteError(null); }}
                       className="text-xs font-semibold text-muted-foreground"
                     >
                       Fechar
@@ -407,12 +408,20 @@ function DiariasPage() {
                       variant="soft"
                       className="mt-2 w-full text-destructive"
                       onClick={async () => {
-                        await deleteAttendance(current.id);
-                        setEditingDate(null);
+                        setDeleteError(null);
+                        try {
+                          await deleteAttendance(current.id);
+                          setEditingDate(null);
+                        } catch (error) {
+                          setDeleteError(error instanceof Error ? error.message : "Não foi possível apagar o lançamento.");
+                        }
                       }}
                     >
                       <Trash2 className="size-4" /> Apagar lançamento
                     </Button>
+                  ) : null}
+                  {deleteError ? (
+                    <p className="mt-2 text-[11px] font-medium text-destructive">{deleteError}</p>
                   ) : null}
                   <p className="mt-2 text-[11px] text-muted-foreground">
                     Toque em um dia do calendário para editar ou lançar a diária.
