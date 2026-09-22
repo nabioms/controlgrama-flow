@@ -11,14 +11,11 @@ await writeFile(iconPath, iconVector);
 
 const iconMarker = 'android:icon="@drawable/ic_controlgrama"';
 if (!manifest.includes(iconMarker)) {
-  const labelMarker = 'android:label="@string/app_name"';
-  if (!manifest.includes(labelMarker)) throw new Error("Android application label not found in AndroidManifest.xml");
-  manifest = manifest.replace(
-    labelMarker,
-    'android:icon="@drawable/ic_controlgrama"\n        android:roundIcon="@drawable/ic_controlgrama"\n        android:label="@string/app_name"'
-  );
+  manifest = manifest
+    .replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/ic_controlgrama"')
+    .replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/ic_controlgrama"');
 }
-
+  
 const marker = "<!-- ControlGrama deep link -->";
 if (!manifest.includes(marker)) {
   const intentFilter = [
