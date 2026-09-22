@@ -6,12 +6,16 @@ import type { Attendance, AttendanceStatus, CashFlowMonth, Contract, ExpenseCate
 interface Store {
   role: UserRole; workers: Worker[]; contracts: Contract[]; expenseCategories: ExpenseCategory[]; invoices: Invoice[];
   workerDocuments: WorkerDocument[]; workerEvents: WorkerEvent[]; attendance: Attendance[]; paymentPeriods: PaymentPeriod[];
-  payments: Payment[]; receivables: Receivable[]; payables: Payable[]; cashFlowHistory: CashFlowMonth[]; serviceTypes: ServiceType[]; serviceOrders: ServiceOrder[];
+  payments: Payment[]; receivables: Receivable[]; payables: Payable[]; cashFlowHistory: CashFlowMonth[]; serviceTypes: ServiceType[]; serviceOrders: ServiceOrder[]; serviceTypes: ServiceType[]; serviceOrders: ServiceOrder[];
   nextPayDate: {date:string;label:string;days:number}; cashBalance:number; loading:boolean; error:string|null;
   refresh:()=>Promise<void>; addWorker:(w:Worker)=>Promise<void>; updateWorker:(id:string,patch:Partial<Worker>)=>Promise<void>;
   setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction?:number)=>Promise<void>;
   closePeriod:(id:string)=>Promise<void>; markPaymentPaid:(id:string,m:PaymentMethod)=>Promise<void>;
   markReceived:(id:string)=>Promise<void>; addPayable:(p:Payable)=>Promise<void>; markPayablePaid:(id:string)=>Promise<void>;
+  addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
+  updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
+  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null})=>Promise<void>;
+  finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>Promise<void>;
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
   addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null})=>Promise<void>;
@@ -30,6 +34,7 @@ export function StoreProvider({children}:{children:ReactNode}){
  const [attendance,setAttendance]=useState<Attendance[]>([]),[paymentPeriods,setPaymentPeriods]=useState<PaymentPeriod[]>([]),[payments,setPayments]=useState<Payment[]>([]);
  const [receivables,setReceivables]=useState<Receivable[]>([]),[payables,setPayables]=useState<Payable[]>([]),[cashFlowHistory,setCashFlowHistory]=useState<CashFlowMonth[]>([]);
  const [serviceTypes,setServiceTypes]=useState<ServiceType[]>([]),[serviceOrders,setServiceOrders]=useState<ServiceOrder[]>([]);
+ const [serviceTypes,setServiceTypes]=useState<ServiceType[]>([]),[serviceOrders,setServiceOrders]=useState<ServiceOrder[]>([]);
  const [openingBalance,setOpeningBalance]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null);
 
  const refresh=useCallback(async()=>{
@@ -43,6 +48,8 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("receivables").select("*").order("expected_date"),supabase.from("payables").select("*").order("due_date"),
    supabase.from("cash_settings").select("opening_balance").eq("id",true).maybeSingle(),
    supabase.from("service_types").select("*").order("name"),
+   supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*)").order("service_date",{ascending:false}).order("order_number",{ascending:false}),
+   supabase.from("service_types").select("*").order("name"),
    supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*)").order("service_date",{ascending:false}).order("order_number",{ascending:false})
   ]);
   const bad=q.find(x=>x.error); if(bad?.error){setError(bad.error.message);setLoading(false);return;}
@@ -50,6 +57,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   setRole((pr.data?.role as UserRole)||"encarregado");setWorkers((w.data||[]).map(worker));setContracts(c.data||[]);setExpenseCategories(cat.data||[]);
   setInvoices(inv.data||[]);setWorkerDocuments(docs.data||[]);setWorkerEvents(events.data||[]);setAttendance(att.data||[]);setPaymentPeriods(periods.data||[]);
   setPayments((pay.data||[]).map(payment));setReceivables((rec.data||[]).map(receivable));setPayables((pb.data||[]).map(payable));
+  setServiceTypes((st.data||[]) as ServiceType[]);setServiceOrders((so.data||[]) as ServiceOrder[]);
   setServiceTypes((st.data||[]) as ServiceType[]);
   setServiceOrders((so.data||[]) as ServiceOrder[]);
   const flowMap:Record<string,{month:string;inflow:number;outflow:number}>={};
@@ -92,6 +100,35 @@ export function StoreProvider({children}:{children:ReactNode}){
  const markReceived=useCallback(async(id:string)=>{const {error}=await supabase.from("receivables").update({status:"recebido",received_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const addPayable=useCallback(async(p:Payable)=>{const {id,paid_at,...row}=p;const {data,error}=await supabase.from("payables").insert({...row,paid_at:null}).select("*").single();if(error)throw error;setPayables(x=>[payable(data),...x])},[]);
  const markPayablePaid=useCallback(async(id:string)=>{const {error}=await supabase.from("payables").update({status:"pago",paid_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
+ const addServiceType=useCallback(async(name:string,unit:ServiceType["unit"],unitPrice:number)=>{
+   const {data,error}=await supabase.from("service_types").insert({name:name.trim(),unit,unit_price:unitPrice}).select("*").single();
+   if(error)throw error; setServiceTypes(x=>[data as ServiceType,...x]);
+ },[]);
+ const updateServiceType=useCallback(async(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>{
+   const {data,error}=await supabase.from("service_types").update(patch).eq("id",id).select("*").single();
+   if(error)throw error; setServiceTypes(x=>x.map(s=>s.id===id?data as ServiceType:s));
+ },[]);
+ const addServiceOrder=useCallback(async(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null})=>{
+   const type=serviceTypes.find(s=>s.id===input.service_type_id); if(!type)throw new Error("Tipo de serviço não encontrado.");
+   const quantity=Number(input.planned_quantity); if(!quantity || quantity<=0)throw new Error("Informe uma quantidade maior que zero.");
+   const {data:userData}=await supabase.auth.getUser();
+   const {data,error}=await supabase.from("service_orders").insert({
+     service_date:input.service_date,service_type_id:type.id,contract_id:input.contract_id||null,
+     planned_quantity:quantity,unit_price:type.unit_price,planned_amount:Math.round(quantity*type.unit_price*100)/100,
+     realized_quantity:null,realized_amount:0,status:"aberta",notes:input.notes||null,created_by:userData.user?.id||null
+   }).select("*, service_type:service_types(*), contract:contracts(*)").single();
+   if(error)throw error; setServiceOrders(x=>[data as ServiceOrder,...x]);
+ },[serviceTypes]);
+ const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>{
+   const order=serviceOrders.find(o=>o.id===id); if(!order)throw new Error("O.S. não encontrada.");
+   const quantity=status==="realizada"?(realizedQuantity==null?order.planned_quantity:Number(realizedQuantity)):0;
+   if(status==="realizada" && quantity<0)throw new Error("Quantidade realizada inválida.");
+   const amount=status==="realizada"?Math.round(quantity*order.unit_price*100)/100:0;
+   const {data,error}=await supabase.from("service_orders").update({
+     status,realized_quantity:status==="realizada"?quantity:null,realized_amount:amount,completed_at:new Date().toISOString()
+   }).eq("id",id).select("*, service_type:service_types(*), contract:contracts(*)").single();
+   if(error)throw error; setServiceOrders(x=>x.map(o=>o.id===id?data as ServiceOrder:o));
+ },[serviceOrders]);
  const addServiceType=useCallback(async(name:string,unit:ServiceType["unit"],unitPrice:number)=>{
    const {data,error}=await supabase.from("service_types").insert({name:name.trim(),unit,unit_price:unitPrice}).select("*").single();
    if(error)throw error; setServiceTypes(x=>[data as ServiceType,...x]);
