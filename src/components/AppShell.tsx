@@ -1,6 +1,19 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { BarChart3, CalendarCheck2, Home, Users, Wallet, FileText, Sprout, ClipboardList } from "lucide-react";
+import { useState } from "react";
+import {
+  BarChart3,
+  CalendarCheck2,
+  ChevronDown,
+  FileText,
+  Home,
+  LogOut,
+  Sprout,
+  UserRound,
+  Users,
+  Wallet,
+  ClipboardList,
+} from "lucide-react";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 
@@ -23,45 +36,99 @@ export function AppShell({
   children: ReactNode;
 }) {
   const { role } = useStore();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const roleLabel = role === "admin" ? "Administrador" : "Encarregado";
+  const roleShort = role === "admin" ? "Admin" : "Encarregado";
 
   return (
     <div className="min-h-screen pb-24">
-      <header className="grass-gradient sticky top-0 z-20 px-4 pb-4 pt-5">
-        <div className="mx-auto flex max-w-3xl items-start justify-between gap-3">
-          <div>
-            <Link to="/" className="flex items-center gap-1.5 text-xs font-semibold opacity-80">
-              <Sprout className="size-3.5" />
-              ControlGrama
-            </Link>
-            <h1 className="font-display mt-1 text-xl font-semibold">{title}</h1>
-            {subtitle ? <p className="text-xs opacity-80">{subtitle}</p> : null}
-          </div>
-          <div className="flex flex-col items-end gap-2">
+      <header className="grass-gradient sticky top-0 z-20 px-4 py-3.5 text-white shadow-sm">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-center justify-between gap-3">
             <Link
-              to="/relatorios"
-              className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold"
+              to="/"
+              className="group flex min-w-0 items-center gap-2.5"
+              onClick={() => setAccountOpen(false)}
             >
-              <FileText className="size-3.5" />
-              Relatórios
-            </Link>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold">
-                Perfil: {role === "admin" ? "Admin" : "Encarregado"}
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
+                <Sprout className="size-5" />
               </span>
-              <button
-                onClick={() => supabase.auth.signOut()}
-                className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold"
+              <span className="truncate text-sm font-bold tracking-tight sm:text-base">
+                ControlGrama
+              </span>
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <Link
+                to="/relatorios"
+                className="flex h-9 items-center gap-2 rounded-xl bg-white/10 px-3 text-xs font-semibold ring-1 ring-white/10 transition hover:bg-white/15"
               >
-                Sair
-              </button>
+                <FileText className="size-4" />
+                <span className="hidden sm:inline">Relatórios</span>
+              </Link>
+
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen((open) => !open)}
+                  aria-expanded={accountOpen}
+                  aria-haspopup="menu"
+                  className="flex h-9 items-center gap-2 rounded-xl bg-white/10 px-2.5 text-xs font-semibold ring-1 ring-white/10 transition hover:bg-white/15"
+                >
+                  <span className="flex size-6 items-center justify-center rounded-lg bg-white/20 text-[11px] font-bold">
+                    {role === "admin" ? "A" : "E"}
+                  </span>
+                  <span className="hidden sm:inline">{roleShort}</span>
+                  <ChevronDown className="size-3.5 opacity-75" />
+                </button>
+
+                {accountOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-11 w-52 overflow-hidden rounded-2xl border border-border bg-card p-1.5 text-foreground shadow-xl"
+                  >
+                    <div className="flex items-center gap-3 rounded-xl px-3 py-2.5">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                        <UserRound className="size-4.5" />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">Seu acesso</p>
+                        <p className="truncate text-xs text-muted-foreground">{roleLabel}</p>
+                      </div>
+                    </div>
+                    <div className="my-1 border-t border-border" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => supabase.auth.signOut()}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-destructive transition hover:bg-destructive/5"
+                    >
+                      <LogOut className="size-4" />
+                      Sair da conta
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
+          </div>
+
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <h1 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+              {title}
+            </h1>
+            {subtitle ? (
+              <p className="mt-0.5 max-w-2xl text-xs leading-5 text-white/75 sm:text-sm">
+                {subtitle}
+              </p>
+            ) : null}
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-5">{children}</main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur"
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur"
         style={{ boxShadow: "var(--shadow-float)" }}
       >
         <div className="mx-auto flex max-w-3xl">
