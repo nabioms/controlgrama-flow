@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plus, UserPlus, UsersRound, UserRound } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, UserPlus, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, Field, Input, SectionTitle, Select } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -73,27 +73,6 @@ function EquipePage() {
       setError(e?.message || "Não foi possível criar a equipe.");
     } finally { setSaving(false); }
   }
-
-  async function saveMembers(team: Team) {
-    setSaving(true); setError("");
-    try {
-      const ids = team.members?.map((w) => w.id) || [];
-      await setTeamMembers(team.id, ids);
-    } catch (e: any) {
-      setError(e?.message || "Não foi possível atualizar os integrantes.");
-    } finally { setSaving(false); }
-  }
-
-  const toggleMember = (team: Team, workerId: string) => {
-    const ids = new Set(team.members?.map((w) => w.id) || []);
-    if (ids.has(workerId)) ids.delete(workerId); else ids.add(workerId);
-    const updated = { ...team, members: workers.filter((w) => ids.has(w.id)) };
-    // Optimistic local edit; persistence is handled by the button below.
-    const index = teams.findIndex((t) => t.id === team.id);
-    if (index >= 0) {
-      (teams as Team[])[index] = updated;
-    }
-  };
 
   return (
     <AppShell title="Equipe e RH" subtitle={`${workers.length} pessoas · ${activeTeams.length} equipes ativas`}>
