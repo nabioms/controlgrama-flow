@@ -28,7 +28,7 @@ const docLabels: Record<string, string> = {
 
 function WorkerDetail() {
   const { workerId } = Route.useParams();
-  const { workers, attendance, payments, updateWorker, workerDocuments, workerEvents } = useStore();
+  const { workers, teams, attendance, payments, updateWorker, workerDocuments, workerEvents } = useStore();
   const worker = workers.find((w) => w.id === workerId);
 
   if (!worker) {
@@ -48,6 +48,7 @@ function WorkerDetail() {
   const docs = workerDocuments.filter((d) => d.worker_id === worker.id);
   const events = workerEvents.filter((e) => e.worker_id === worker.id);
   const history = payments.filter((p) => p.worker_id === worker.id);
+  const workerTeam = teams.find((t) => t.members?.some((m) => m.id === worker.id));
 
   return (
     <AppShell title={worker.full_name} subtitle={worker.job_role}>
@@ -70,6 +71,7 @@ function WorkerDetail() {
           <div><dt className="text-muted-foreground">CPF</dt><dd className="font-semibold">{worker.cpf || "—"}</dd></div>
           <div><dt className="text-muted-foreground">RG</dt><dd className="font-semibold">{worker.rg || "—"}</dd></div>
           <div><dt className="text-muted-foreground">Telefone</dt><dd className="font-semibold">{worker.phone || "—"}</dd></div>
+          <div><dt className="text-muted-foreground">Equipe</dt><dd className="font-semibold">{workerTeam?.name || "Sem equipe"}</dd></div>
           <div><dt className="text-muted-foreground">Admissão</dt><dd className="font-semibold">{formatDate(worker.admission_date)}</dd></div>
           <div className="col-span-2"><dt className="text-muted-foreground">Endereço</dt><dd className="font-semibold">{worker.address || "—"}</dd></div>
         </dl>
