@@ -3,7 +3,7 @@ import { FileText, Upload } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState, SectionTitle } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { workerDocuments, workerEvents } from "@/lib/mock-data";
+
 import { brl, daysUntil, formatDate, initials, toISO } from "@/lib/format";
 
 export const Route = createFileRoute("/equipe/$workerId")({
@@ -28,7 +28,7 @@ const docLabels: Record<string, string> = {
 
 function WorkerDetail() {
   const { workerId } = Route.useParams();
-  const { workers, attendance, payments, updateWorker } = useStore();
+  const { workers, attendance, payments, updateWorker, workerDocuments, workerEvents } = useStore();
   const worker = workers.find((w) => w.id === workerId);
 
   if (!worker) {
