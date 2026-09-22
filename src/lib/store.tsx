@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "./supabase";
 import { businessDay, daysUntil, toISO } from "./format";
-import type { Attendance, AttendanceStatus, CashFlowMonth, Contract, ExpenseCategory, Invoice, Payable, Payment, PaymentMethod, PaymentPeriod, Receivable, ServiceOrder, ServiceOrderStatus, ServiceType, Team, UserRole, Worker, WorkerDocument, WorkerEvent } from "./types";
+import type { Attendance, AttendanceStatus, CashFlowMonth, Contract, ExpenseCategory, Invoice, Payable, Payment, PaymentMethod, PaymentPeriod, Receivable, ServiceOrder, ServiceOrderItem, ServiceOrderStatus, ServiceType, Team, UserRole, Worker, WorkerDocument, WorkerEvent } from "./types";
 
 interface Store {
   role: UserRole; workers: Worker[]; contracts: Contract[]; expenseCategories: ExpenseCategory[]; invoices: Invoice[];
@@ -15,8 +15,8 @@ interface Store {
   addTeam:(name:string,foremanWorkerId:string|null)=>Promise<void>; updateTeam:(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"active">>)=>Promise<void>; setTeamMembers:(teamId:string,workerIds:string[])=>Promise<void>;
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
-  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null})=>Promise<void>;
-  finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>Promise<void>;
+  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
+  finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>Promise<void>;
 }
 const StoreContext=createContext<Store|null>(null);
 const date=(v:any)=>v?v.slice(0,10):null;
@@ -45,7 +45,7 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("cash_settings").select("opening_balance").eq("id",true).maybeSingle(),
    supabase.from("teams").select("*, team_members(team_id,worker_id,worker:workers(*))").order("name"),
    supabase.from("service_types").select("*").order("name"),
-   supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*), team:teams(*), service_order_workers(worker_id, worker:workers(*))").order("service_date",{ascending:false}).order("order_number",{ascending:false})
+   supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*), team:teams(*), service_order_workers(worker_id, worker:workers(*)), service_order_items(*, service_type:service_types(*))").order("service_date",{ascending:false}).order("order_number",{ascending:false})
   ]);
   const bad=q.find(x=>x.error); if(bad?.error){setError(bad.error.message);setLoading(false);return;}
   const [pr,w,c,cat,inv,docs,events,att,periods,pay,rec,pb,settings,tm,st,so]=q;
@@ -57,7 +57,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   setTeams(teamRows.map(t=>({...t,foreman:workerRows.find(x=>x.id===t.foreman_worker_id)||null,members:(t.team_members||[]).map((m:any)=>workerRows.find(x=>x.id===m.worker_id)||m.worker).filter(Boolean)})) as Team[]);
   const teamMap=new Map(teamRows.map(t=>[t.id,t]));
   setServiceTypes((st.data||[]) as ServiceType[]);
-  setServiceOrders((so.data||[]).map((o:any)=>({...o,team:o.team_id?(teamMap.get(o.team_id)||o.team):o.team})) as ServiceOrder[]);
+  setServiceOrders((so.data||[]).map((o:any)=>({...o,team:o.team_id?(teamMap.get(o.team_id)||o.team):o.team,items:(o.service_order_items||[]).map((i:any)=>({...i,service_type:i.service_type||null}))})) as ServiceOrder[]);
   const flowMap:Record<string,{month:string;inflow:number;outflow:number}>={};
   (rec.data||[]).filter((x:any)=>x.status==="recebido").forEach((x:any)=>{const m=String(x.received_at||x.expected_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].inflow+=Number(x.expected_amount||0)});
   (pb.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.due_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
@@ -110,31 +110,55 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    const {data,error}=await supabase.from("service_types").update(patch).eq("id",id).select("*").single();
    if(error)throw error; setServiceTypes(x=>x.map(s=>s.id===id?data as ServiceType:s));
  },[]);
- const addServiceOrder=useCallback(async(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null})=>{
-   const type=serviceTypes.find(s=>s.id===input.service_type_id); if(!type)throw new Error("Tipo de serviço não encontrado.");
+ const addServiceOrder=useCallback(async(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>{
    const team=teams.find(t=>t.id===input.team_id); if(!team||!team.active)throw new Error("Selecione uma equipe ativa.");
    if(!team.foreman_worker_id)throw new Error("A equipe precisa ter um encarregado definido.");
    const memberIds=(team.members||[]).filter(w=>w.status!=="desligado").map(w=>w.id); if(!memberIds.length)throw new Error("A equipe precisa ter pelo menos um integrante.");
-   const quantity=Number(input.planned_quantity); if(!quantity || quantity<=0)throw new Error("Informe uma quantidade maior que zero.");
+   const requested=(input.services&&input.services.length?input.services:[{service_type_id:input.service_type_id,planned_quantity:input.planned_quantity}])
+     .map(x=>({service_type_id:x.service_type_id,planned_quantity:Number(x.planned_quantity)}))
+     .filter(x=>x.service_type_id&&x.planned_quantity>0);
+   if(!requested.length)throw new Error("Adicione pelo menos um serviço com quantidade maior que zero.");
+   const items=requested.map(x=>{const type=serviceTypes.find(s=>s.id===x.service_type_id);if(!type)throw new Error("Tipo de serviço não encontrado.");return {type,quantity:x.planned_quantity,amount:Math.round(x.planned_quantity*Number(type.unit_price)*100)/100};});
+   const first=items[0]!;
+   const total=items.reduce((s,x)=>s+x.amount,0);
    const {data:userData}=await supabase.auth.getUser();
    const {data,error}=await supabase.from("service_orders").insert({
-     service_date:input.service_date,service_type_id:type.id,contract_id:input.contract_id||null,team_id:team.id,
-     planned_quantity:quantity,unit_price:type.unit_price,planned_amount:Math.round(quantity*type.unit_price*100)/100,
+     service_date:input.service_date,service_type_id:first.type.id,contract_id:input.contract_id||null,team_id:team.id,
+     planned_quantity:first.quantity,unit_price:first.type.unit_price,planned_amount:total,
      realized_quantity:null,realized_amount:0,status:"aberta",notes:input.notes||null,created_by:userData.user?.id||null
    }).select("*, service_type:service_types(*), contract:contracts(*), team:teams(*)").single();
    if(error)throw error;
-   const {error:teamError}=await supabase.from("service_order_workers").insert(memberIds.map(worker_id=>({service_order_id:data.id,worker_id}))); if(teamError){await supabase.from("service_orders").delete().eq("id",data.id);throw teamError;}
-   setServiceOrders(x=>[{...data,team} as ServiceOrder,...x]);
+   const {error:itemError}=await supabase.from("service_order_items").insert(items.map(x=>({
+     service_order_id:data.id,service_type_id:x.type.id,planned_quantity:x.quantity,realized_quantity:null,
+     unit_price:x.type.unit_price,planned_amount:x.amount,realized_amount:0
+   })));
+   if(itemError){await supabase.from("service_orders").delete().eq("id",data.id);throw itemError;}
+   const {error:teamError}=await supabase.from("service_order_workers").insert(memberIds.map(worker_id=>({service_order_id:data.id,worker_id})));
+   if(teamError){await supabase.from("service_order_items").delete().eq("service_order_id",data.id);await supabase.from("service_orders").delete().eq("id",data.id);throw teamError;}
+   const createdItems:ServiceOrderItem[]=items.map((x,index)=>({id:"",service_order_id:data.id,service_type_id:x.type.id,planned_quantity:x.quantity,realized_quantity:null,unit_price:Number(x.type.unit_price),planned_amount:x.amount,realized_amount:0,created_at:"",updated_at:"",service_type:x.type}));
+   setServiceOrders(x=>[{...data,team,items:createdItems} as ServiceOrder,...x]);
  },[serviceTypes,teams]);
- const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>{
+ const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>{
    const order=serviceOrders.find(o=>o.id===id); if(!order)throw new Error("O.S. não encontrada.");
-   const quantity=status==="realizada"?(realizedQuantity==null?order.planned_quantity:Number(realizedQuantity)):0;
-   if(status==="realizada" && quantity<0)throw new Error("Quantidade realizada inválida.");
-   const amount=status==="realizada"?Math.round(quantity*order.unit_price*100)/100:0;
+   if(status==="nao_realizada"){
+     const {data,error}=await supabase.from("service_orders").update({status,realized_quantity:null,realized_amount:0,completed_at:new Date().toISOString()}).eq("id",id).select("*, service_type:service_types(*), contract:contracts(*), team:teams(*)").single();
+     if(error)throw error; setServiceOrders(x=>x.map(o=>o.id===id?{...o,...data,items:o.items}:o)); return;
+   }
+   const quantities=realizedQuantities||[];
+   const itemRows=order.items||[];
+   const rows=itemRows.map(item=>({item,quantity:Number(quantities.find(q=>q.item_id===item.id)?.quantity??item.planned_quantity)}));
+   if(rows.some(x=>!Number.isFinite(x.quantity)||x.quantity<0))throw new Error("Há quantidade realizada inválida.");
+   const totalRealized=rows.reduce((s,x)=>s+x.quantity*Number(x.item.unit_price),0);
+   for(const row of rows){
+     const amount=Math.round(row.quantity*Number(row.item.unit_price)*100)/100;
+     const {error}=await supabase.from("service_order_items").update({realized_quantity:row.quantity,realized_amount:amount}).eq("id",row.item.id);
+     if(error)throw error;
+   }
    const {data,error}=await supabase.from("service_orders").update({
-     status,realized_quantity:status==="realizada"?quantity:null,realized_amount:amount,completed_at:new Date().toISOString()
+     status,realized_quantity:rows.reduce((s,x)=>s+x.quantity,0),realized_amount:Math.round(totalRealized*100)/100,completed_at:new Date().toISOString()
    }).eq("id",id).select("*, service_type:service_types(*), contract:contracts(*), team:teams(*)").single();
-   if(error)throw error; setServiceOrders(x=>x.map(o=>o.id===id?data as ServiceOrder:o));
+   if(error)throw error;
+   setServiceOrders(x=>x.map(o=>o.id===id?{...o,...data,items:(o.items||[]).map(item=>{const row=rows.find(r=>r.item.id===item.id);return row?{...item,realized_quantity:row.quantity,realized_amount:Math.round(row.quantity*Number(item.unit_price)*100)/100}:item})}:o));
  },[serviceOrders]);
  const today=new Date(),yy=today.getFullYear(),mm=today.getMonth()+1;
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — fechamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — fechamento"}];
