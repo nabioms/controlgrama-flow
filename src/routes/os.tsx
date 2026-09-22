@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CheckCircle2, ClipboardList, Minus, Pencil, Plus, Settings2, Trash2, UsersRound, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardList, Minus, Pencil, Plus, Settings2, Trash2, UsersRound, XCircle } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -16,7 +16,7 @@ const quantityInputClass = "h-12 w-full rounded-xl border border-border bg-backg
 function parseQuantity(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return 0;
-  if (trimmed.includes(",")) return Number(trimmed.replace(/./g, "").replace(",", "."));
+  if (trimmed.includes(",")) return Number(trimmed.replace(/\./g, "").replace(",", "."));
   return Number(trimmed);
 }
 
@@ -49,7 +49,7 @@ function ServiceOrdersPage() {
   const [editTeamId, setEditTeamId] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editServices, setEditServices] = useState<DraftService[]>([]);
-  const [editSaving, setEditSaving] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);\n  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);\n  const [deleting, setDeleting] = useState(false);
 
   const activeTypes = serviceTypes.filter((x) => x.active);
   const activeTeams = teams.filter((x) => x.active);
@@ -180,18 +180,22 @@ function ServiceOrdersPage() {
     }
   }
 
-  async function removeOrder(orderId: string) {
-    const order = serviceOrders.find((o) => o.id === orderId);
-    if (!order) return;
-    const confirmed = window.confirm(
-      `Apagar a O.S. #${order.order_number}? Essa ação também removerá o lançamento correspondente em Financeiro, se ele ainda estiver pendente.`
-    );
-    if (!confirmed) return;
+  function removeOrder(orderId: string) {
+    setError("");
+    setDeleteTarget(orderId);
+  }
+
+  async function confirmDeleteOrder() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     setError("");
     try {
-      await deleteServiceOrder(orderId);
+      await deleteServiceOrder(deleteTarget);
+      setDeleteTarget(null);
     } catch (e: any) {
       setError(e?.message || "Não foi possível apagar a O.S.");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -408,6 +412,65 @@ function ServiceOrdersPage() {
               );
             })()}
           </Card>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/55 p-3 backdrop-blur-[2px] sm:items-center">
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-border bg-card shadow-2xl">
+            {(() => {
+              const order = serviceOrders.find((o) => o.id === deleteTarget);
+              if (!order) return null;
+              const receivable = receivables.find((r) => r.service_order_id === order.id);
+              const serviceNames = (order.items?.length
+                ? order.items.map((item) => item.service_type?.name || serviceTypes.find((t) => t.id === item.service_type_id)?.name || "Serviço")
+                : [order.service_type?.name || "Serviço"]).join(" + ");
+              return (
+                <>
+                  <div className="p-5 pb-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex size-12 shrink-0 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                        <Trash2 className="size-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-bold tracking-tight">Excluir O.S.?</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Você está prestes a excluir a <strong className="text-foreground">O.S. #{order.order_number}</strong>.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-2xl border border-border bg-muted/40 p-3">
+                      <p className="text-sm font-semibold">{serviceNames}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {formatDate(order.service_date)} · {brl(Number(order.status === "realizada" ? order.realized_amount : order.planned_amount))}
+                      </p>
+                    </div>
+
+                    <div className="mt-3 flex items-start gap-2 rounded-2xl bg-destructive/8 p-3 text-xs text-destructive">
+                      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                      <span>
+                        Esta ação é permanente. {receivable && receivable.status !== "recebido"
+                          ? "O lançamento pendente correspondente também será removido do Financeiro."
+                          : "Os dados desta O.S. serão removidos do sistema."}
+                      </span>
+                    </div>
+
+                    {error && <p className="mt-3 text-xs font-semibold text-destructive">{error}</p>}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 border-t border-border bg-muted/20 p-4">
+                    <Button variant="outline" disabled={deleting} onClick={() => { setDeleteTarget(null); setError(""); }}>
+                      Cancelar
+                    </Button>
+                    <Button variant="danger" disabled={deleting} onClick={confirmDeleteOrder}>
+                      <Trash2 className="size-4" /> {deleting ? "Excluindo..." : "Excluir"}
+                    </Button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </div>
       )}
 
