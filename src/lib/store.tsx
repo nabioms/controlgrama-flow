@@ -70,6 +70,50 @@ export function StoreProvider({children}:{children:ReactNode}){
  },[]);
  useEffect(()=>{refresh()},[refresh]);
 
+ useEffect(()=>{
+  let disposed=false;
+  const sync=()=>{
+   if(disposed || typeof document === "undefined" || document.visibilityState !== "visible") return;
+   void refresh();
+  };
+
+  window.addEventListener("focus",sync);
+  document.addEventListener("visibilitychange",sync);
+  const interval=window.setInterval(sync,30000);
+
+  let nativeCleanup:(()=>void)|null=null;
+  void import("@capacitor/app").then(({App})=>{
+   if(disposed) return;
+   const listener=App.addListener("appStateChange",({isActive})=>{
+    if(isActive) sync();
+   });
+   nativeCleanup=()=>{ void listener.remove(); };
+  }).catch(()=>{});
+
+  const channel=supabase
+   .channel("controlgrama-data-sync")
+   .on("postgres_changes",{event:"*",schema:"public",table:"attendance"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"workers"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"teams"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"team_members"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"service_orders"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"service_order_items"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"payments"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"payment_periods"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"receivables"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"payables"},sync)
+   .subscribe();
+
+  return ()=>{
+   disposed=true;
+   window.removeEventListener("focus",sync);
+   document.removeEventListener("visibilitychange",sync);
+   window.clearInterval(interval);
+   nativeCleanup?.();
+   void supabase.removeChannel(channel);
+  };
+ },[refresh]);
+
  const addWorker=useCallback(async(w:Worker,teamId?:string|null)=>{const {id,...row}=w;const {data,error}=await supabase.from("workers").insert(row).select("*").single();if(error)throw error;const created=worker(data);if(teamId){const {error:teamError}=await supabase.from("team_members").insert({team_id:teamId,worker_id:created.id});if(teamError){await supabase.from("workers").delete().eq("id",created.id);throw teamError;}}setWorkers(x=>[created,...x]);await refresh()},[refresh]);
  const updateWorker=useCallback(async(id:string,patch:Partial<Worker>)=>{const row:any={...patch};delete row.id;delete row.created_at;const {data,error}=await supabase.from("workers").update(row).eq("id",id).select("*").single();if(error)throw error;setWorkers(x=>x.map(w=>w.id===id?worker(data):w))},[]);
  const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction=1)=>{
