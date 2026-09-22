@@ -15,7 +15,7 @@ if (!manifest.includes(iconMarker)) {
   if (!manifest.includes(labelMarker)) throw new Error("Android application label not found in AndroidManifest.xml");
   manifest = manifest.replace(
     labelMarker,
-    'android:icon="@drawable/ic_controlgrama"\\n        android:roundIcon="@drawable/ic_controlgrama"\\n        android:label="@string/app_name"'
+    'android:icon="@drawable/ic_controlgrama"\n        android:roundIcon="@drawable/ic_controlgrama"\n        android:label="@string/app_name"'
   );
 }
 
