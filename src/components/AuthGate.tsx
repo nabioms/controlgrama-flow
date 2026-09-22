@@ -88,7 +88,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
           password,
           options: {
             data: { full_name: name.trim() },
-            emailRedirectTo: Capacitor.isNativePlatform()\n              ? "controlgrama://auth/callback"\n              : window.location.origin,
+            emailRedirectTo: Capacitor.isNativePlatform()
+              ? "controlgrama://auth/callback"\n              : window.location.origin,
           },
         })
       : await supabase.auth.signInWithPassword({
