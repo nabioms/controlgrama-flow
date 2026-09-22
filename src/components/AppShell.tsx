@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   CalendarCheck2,
@@ -8,6 +8,8 @@ import {
   FileText,
   Home,
   LogOut,
+  Moon,
+  Sun,
   Sprout,
   UserRound,
   Users,
@@ -37,8 +39,24 @@ export function AppShell({
 }) {
   const { role } = useStore();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("controlgrama-theme") === "dark";
+  });
   const roleLabel = role === "admin" ? "Administrador" : "Encarregado";
   const roleShort = role === "admin" ? "Admin" : "Encarregado";
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
+
+  function toggleTheme() {
+    setDarkMode((current) => {
+      const next = !current;
+      localStorage.setItem("controlgrama-theme", next ? "dark" : "light");
+      return next;
+    });
+  }
 
   return (
     <div className="min-h-screen pb-24">
@@ -97,6 +115,15 @@ export function AppShell({
                       </div>
                     </div>
                     <div className="my-1 border-t border-border" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={toggleTheme}
+                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-foreground transition hover:bg-accent"
+                    >
+                      {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+                      {darkMode ? "Modo claro" : "Modo escuro"}
+                    </button>
                     <button
                       type="button"
                       role="menuitem"
