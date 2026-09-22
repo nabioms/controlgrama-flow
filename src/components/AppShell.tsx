@@ -9,7 +9,6 @@ const navItems = [
   { to: "/ponto", label: "Ponto", icon: CalendarCheck2 },
   { to: "/diarias", label: "Diárias", icon: Wallet },
   { to: "/os", label: "O.S.", icon: ClipboardList },
-  { to: "/os", label: "O.S.", icon: ClipboardList },
   { to: "/financeiro", label: "Financeiro", icon: BarChart3 },
   { to: "/equipe", label: "Equipe", icon: Users },
 ] as const;
