@@ -9,7 +9,7 @@ interface Store {
   payments: Payment[]; receivables: Receivable[]; payables: Payable[]; cashFlowHistory: CashFlowMonth[];
   nextPayDate: {date:string;label:string;days:number}; cashBalance:number; loading:boolean; error:string|null;
   refresh:()=>Promise<void>; addWorker:(w:Worker)=>Promise<void>; updateWorker:(id:string,patch:Partial<Worker>)=>Promise<void>;
-  setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null)=>Promise<void>;
+  setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction?:number)=>Promise<void>;
   closePeriod:(id:string)=>Promise<void>; markPaymentPaid:(id:string,m:PaymentMethod)=>Promise<void>;
   markReceived:(id:string)=>Promise<void>; addPayable:(p:Payable)=>Promise<void>; markPayablePaid:(id:string)=>Promise<void>;
 }
@@ -54,8 +54,31 @@ export function StoreProvider({children}:{children:ReactNode}){
 
  const addWorker=useCallback(async(w:Worker)=>{const {id,...row}=w;const {data,error}=await supabase.from("workers").insert(row).select("*").single();if(error)throw error;setWorkers(x=>[worker(data),...x])},[]);
  const updateWorker=useCallback(async(id:string,patch:Partial<Worker>)=>{const row:any={...patch};delete row.id;delete row.created_at;const {data,error}=await supabase.from("workers").update(row).eq("id",id).select("*").single();if(error)throw error;setWorkers(x=>x.map(w=>w.id===id?worker(data):w))},[]);
- const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null)=>{const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,notes:notes||null,contract_id:contractId||null},{onConflict:"worker_id,date"}).select("*").single();if(error)throw error;setAttendance(x=>[data,...x.filter(a=>!(a.worker_id===workerId&&a.date===dateValue))])},[]);
- const closePeriod=useCallback(async(id:string)=>{const p=paymentPeriods.find(x=>x.id===id);if(!p)return;for(const w of workers.filter(x=>x.status!=="desligado")){const days=attendance.filter(a=>a.worker_id===w.id&&a.date>=p.start_date&&a.date<=p.end_date&&a.status==="presente").length;if(!days)continue;const gross=w.employment_type==="diarista"?days*(w.daily_rate||0):(w.salary||0)*days/30;const {error}=await supabase.from("payments").upsert({period_id:id,worker_id:w.id,worked_days:days,daily_rate:w.employment_type==="diarista"?w.daily_rate:null,gross_amount:Math.round(gross*100)/100,status:"pendente"},{onConflict:"period_id,worker_id"});if(error)throw error}const {error}=await supabase.from("payment_periods").update({status:"fechado"}).eq("id",id);if(error)throw error;await refresh()},[paymentPeriods,workers,attendance,refresh]);
+ const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction=1)=>{
+  const fraction=status==="presente"?workFraction:0;
+  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null},{onConflict:"worker_id,date"}).select("*").single();
+  if(error)throw error;
+  setAttendance(x=>[data,...x.filter(a=>!(a.worker_id===workerId&&a.date===dateValue))]);
+},[]);
+ const closePeriod=useCallback(async(id:string)=>{
+  const p=paymentPeriods.find(x=>x.id===id);if(!p)return;
+  for(const w of workers.filter(x=>x.status!=="desligado")){
+    const workedDays=attendance
+      .filter(a=>a.worker_id===w.id&&a.date>=p.start_date&&a.date<=p.end_date&&a.status==="presente")
+      .reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
+    if(!workedDays)continue;
+    const gross=w.employment_type==="diarista"?workedDays*(w.daily_rate||0):(w.salary||0)*workedDays/30;
+    const {error}=await supabase.from("payments").upsert({
+      period_id:id,worker_id:w.id,worked_days:Math.round(workedDays*100)/100,
+      daily_rate:w.employment_type==="diarista"?w.daily_rate:null,
+      gross_amount:Math.round(gross*100)/100,status:"pendente"
+    },{onConflict:"period_id,worker_id"});
+    if(error)throw error;
+  }
+  const {error}=await supabase.from("payment_periods").update({status:"fechado"}).eq("id",id);
+  if(error)throw error;
+  await refresh();
+},[paymentPeriods,workers,attendance,refresh]);
  const markPaymentPaid=useCallback(async(id:string,m:PaymentMethod)=>{const {error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const markReceived=useCallback(async(id:string)=>{const {error}=await supabase.from("receivables").update({status:"recebido",received_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const addPayable=useCallback(async(p:Payable)=>{const {id,paid_at,...row}=p;const {data,error}=await supabase.from("payables").insert({...row,paid_at:null}).select("*").single();if(error)throw error;setPayables(x=>[payable(data),...x])},[]);
