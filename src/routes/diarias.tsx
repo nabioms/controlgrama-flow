@@ -26,10 +26,10 @@ const methods: PaymentMethod[] = ["pix", "dinheiro", "transferencia"];
 
 function DiariasPage() {
   const { paymentPeriods, payments, workers, closePeriod, markPaymentPaid, attendance } = useStore();
-  const [periodId, setPeriodId] = useState(paymentPeriods[1]!.id);
+  const [periodId, setPeriodId] = useState<string>(paymentPeriods[0]?.id ?? "");
   const [method, setMethod] = useState<PaymentMethod>("pix");
 
-  const period = paymentPeriods.find((p) => p.id === periodId)!;
+  const period = paymentPeriods.find((p) => p.id === periodId);\n  if (!period) {\n    return (\n      <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">\n        <EmptyState text="Nenhum período de pagamento cadastrado ainda." />\n      </AppShell>\n    );\n  }
   const rows = payments.filter((p) => p.period_id === periodId);
   const preview = workers
     .filter((w) => w.status !== "desligado")
