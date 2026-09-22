@@ -14,7 +14,7 @@ const unitLabel: Record<ServiceUnit, string> = { m2: "m²", km: "km", hora: "hor
 type DraftService = { service_type_id: string; planned_quantity: string };
 
 function ServiceOrdersPage() {
-  const { serviceTypes, serviceOrders, contracts, teams, addServiceType, updateServiceType, addServiceOrder, finalizeServiceOrder } = useStore();
+  const { serviceTypes, serviceOrders, contracts, teams, receivables, addServiceType, updateServiceType, addServiceOrder, finalizeServiceOrder } = useStore();
   const today = toISO(new Date());
 
   const [date, setDate] = useState(today);
@@ -234,6 +234,17 @@ function ServiceOrdersPage() {
                 <div><p className="text-[11px] text-muted-foreground">Encarregado</p><p className="font-semibold text-xs">{team?.foreman?.full_name || "Sem encarregado"}</p></div>
                 <div className="text-right"><p className="text-[11px] text-muted-foreground">{o.status === "realizada" ? "Valor realizado" : "Valor previsto"}</p><p className="font-semibold">{brl(Number(o.status === "realizada" ? o.realized_amount : o.planned_amount))}</p></div>
               </div>
+              {o.status === "realizada" ? (() => {
+                const receivable = receivables.find((r) => r.service_order_id === o.id);
+                return (
+                  <div className="mt-3 flex items-center justify-between rounded-lg border bg-muted/40 px-3 py-2 text-xs">
+                    <span className="text-muted-foreground">Financeiro</span>
+                    <span className="font-semibold">
+                      {receivable ? (receivable.status === "recebido" ? "Recebida" : "A receber") : "Sem lançamento financeiro"}
+                    </span>
+                  </div>
+                );
+              })() : null}
               {o.status === "aberta" && <div className="mt-3 grid grid-cols-2 gap-2"><Button onClick={() => openFinish(o.id)}><CheckCircle2 className="size-4" /> OK — realizada</Button><Button variant="outline" onClick={() => { setFinishing(o.id); setRealizedInputs({}); }}><XCircle className="size-4" /> Não OK</Button></div>}
             </Card>
           );
