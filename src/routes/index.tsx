@@ -35,20 +35,48 @@ function Dashboard() {
   const dayRows = attendance.filter((a) => a.date === today);
   const presentToday = dayRows.filter((a) => a.status === "presente").length;
 
-  const openPeriod =
-    paymentPeriods.find((p) => p.pay_date === nextPayDate.date) ?? paymentPeriods[1] ?? paymentPeriods[0] ?? null;
-  const estimated = openPeriod
-    ? diaristas.reduce((sum, w) => {
-        const days = attendance.filter(
-          (a) =>
-            a.worker_id === w.id &&
-            a.status === "presente" &&
-            a.date >= openPeriod.start_date &&
-            a.date <= openPeriod.end_date,
-        ).length;
-        return sum + days * (w.daily_rate ?? 0);
-      }, 0)
-    : 0;
+  const nextPaymentStart = (() => {
+    const payDate = new Date(`${nextPayDate.date}T12:00:00`);
+    const payYear = payDate.getFullYear();
+    const payMonth = payDate.getMonth() + 1;
+    const currentMonthFifth = (() => {
+      let count = 0;
+      const lastDay = new Date(payYear, payMonth, 0).getDate();
+      for (let day = 1; day <= lastDay; day += 1) {
+        const weekday = new Date(payYear, payMonth - 1, day).getDay();
+        if (weekday === 0 || weekday === 6) continue;
+        count += 1;
+        if (count === 5) return `${payYear}-${String(payMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      }
+      return nextPayDate.date;
+    })();
+
+    if (nextPayDate.label.includes("Dia 20")) {
+      return `${payYear}-${String(payMonth).padStart(2, "0")}-${String(currentMonthFifth.slice(8, 10)).padStart(2, "0")}`;
+    }
+
+    if (nextPayDate.date.slice(0, 7) === month) {
+      const previousMonthDate = new Date(payYear, payMonth - 2, 21);
+      return toISO(previousMonthDate);
+    }
+
+    const currentMonthDate = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 20);
+    return toISO(currentMonthDate);
+  })();
+
+  const estimated = diaristas.reduce((sum, w) => {
+    const worked = attendance
+      .filter(
+        (a) =>
+          a.worker_id === w.id &&
+          a.status === "presente" &&
+          a.date >= nextPaymentStart &&
+          a.date < nextPayDate.date,
+      )
+      .reduce((days, a) => days + Number(a.work_fraction ?? 1), 0);
+
+    return sum + worked * (w.daily_rate ?? 0);
+  }, 0);
 
   const openReceivables = receivables.filter((r) => r.status === "pendente");
   const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
