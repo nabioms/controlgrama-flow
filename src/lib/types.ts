@@ -86,7 +86,7 @@ export interface Attendance {
   date: ISODate;
   status: AttendanceStatus;
   /** 1 = dia integral; 0.5 = meio período. */
-  work_fraction: number;
+  work_fraction?: number;
   /** frente de serviço / local */
   notes: string | null;
   contract_id: UUID | null;
