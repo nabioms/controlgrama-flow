@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, CalendarClock, Landmark, PiggyBank, Users } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, Landmark, PiggyBank, Users, ClipboardList } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Card, ProgressBar, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { workers, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments } = useStore();
+  const { workers, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments, serviceOrders } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
 
@@ -50,6 +50,8 @@ function Dashboard() {
 
   const openReceivables = receivables.filter((r) => r.status === "pendente");
   const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
+  const monthProduction = serviceOrders.filter((o) => o.service_date.startsWith(month) && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
+  const todayProduction = serviceOrders.filter((o) => o.service_date === today && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
 
   const docAlerts = workerDocuments
     .filter((d) => d.expires_at && daysUntil(d.expires_at) <= 45)
@@ -73,6 +75,8 @@ function Dashboard() {
   return (
     <AppShell title="Painel geral" subtitle={formatLongDate(today)}>
       <div className="mb-4 grid grid-cols-2 gap-2.5">
+        <StatCard label="Produção hoje" value={brl(todayProduction)} sub="O.S. realizadas" tone="success" icon={<ClipboardList className="size-4" />} />
+        <StatCard label="Produção no mês" value={brl(monthProduction)} sub="O.S. realizadas" tone="info" icon={<ClipboardList className="size-4" />} />
         <StatCard
           label="Equipe ativa"
           value={String(active.length)}
@@ -125,6 +129,13 @@ function Dashboard() {
         <Link to="/diarias" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold">
           Abrir fechamento <ArrowRight className="size-3.5" />
         </Link>
+      </Card>
+
+      <Card className="mb-5">
+        <div className="flex items-center justify-between gap-3">
+          <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produção</p><p className="font-display mt-1 text-2xl font-semibold">{brl(monthProduction)}</p><p className="text-xs text-muted-foreground">Somente O.S. marcadas como realizadas neste mês.</p></div>
+          <Link to="/os" className="inline-flex items-center gap-1 text-xs font-semibold text-primary">Abrir O.S. <ArrowRight className="size-3.5" /></Link>
+        </div>
       </Card>
 
       <SectionTitle title="Contas a pagar do mês" hint={`${monthPayables.length} em aberto`} />
