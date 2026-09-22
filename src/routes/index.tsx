@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { workers, teams, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments, serviceOrders } = useStore();
+  const { workers, teams, attendance, receivables, payables, nextPayDate, cashBalance, contracts, workerDocuments, serviceOrders } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
   const closureDate = (() => { const d = new Date(`${nextPayDate.date}T12:00:00`); d.setDate(d.getDate() - 1); return toISO(d); })();
