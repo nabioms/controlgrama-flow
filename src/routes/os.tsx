@@ -49,7 +49,9 @@ function ServiceOrdersPage() {
   const [editTeamId, setEditTeamId] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editServices, setEditServices] = useState<DraftService[]>([]);
-  const [editSaving, setEditSaving] = useState(false);\n  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);\n  const [deleting, setDeleting] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const activeTypes = serviceTypes.filter((x) => x.active);
   const activeTeams = teams.filter((x) => x.active);
