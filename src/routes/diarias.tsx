@@ -43,6 +43,21 @@ const monthTitle = (month: string) => {
 
 const nextMonth = (month: string) => shiftMonth(month, 1);
 
+const fifthBusinessDay = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  let count = 0;
+  const lastDay = new Date(year, monthNumber, 0).getDate();
+
+  for (let day = 1; day <= lastDay; day += 1) {
+    const weekday = new Date(year, monthNumber - 1, day).getDay();
+    if (weekday === 0 || weekday === 6) continue;
+    count += 1;
+    if (count === 5) return monthToDate(month, day);
+  }
+
+  return monthToDate(month, lastDay);
+};
+
 const paymentCycles = (month: string) => {
   const [year, monthNumber] = month.split("-").map(Number);
   const next = new Date(year, monthNumber, 1);
@@ -59,7 +74,9 @@ const paymentCycles = (month: string) => {
       end: monthToDate(month, new Date(year, monthNumber, 0).getDate()),
       label: "5º dia útil",
       description: "2ª quinzena",
-      payDate: null as string | null,
+      payDate: fifthBusinessDay(
+        next.getFullYear() + "-" + pad(next.getMonth() + 1),
+      ),
       nextMonthYear: next.getFullYear(),
       nextMonthNumber: next.getMonth() + 1,
     },
@@ -255,7 +272,9 @@ function DiariasPage() {
             <p className="text-xs text-muted-foreground">
               {detail.second.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias · 16–{detail.daysInMonth}
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">Pagamento no 5º dia útil de {monthTitle(nextPayMonth)}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Pagamento em {formatDate(detail.cycles.secondHalf.payDate!)} · 5º dia útil de {monthTitle(nextPayMonth)}
+            </p>
           </Card>
         </div>
 
@@ -389,7 +408,7 @@ function DiariasPage() {
         <p className="text-xs font-semibold">Como o pagamento é calculado</p>
         <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
           <p>• Dias 01–15 → pagamento no dia 20.</p>
-          <p>• Dias 16–fim do mês → pagamento no 5º dia útil do mês seguinte.</p>
+          <p>• Dias 16–fim do mês → pagamento no 5º dia útil do mês seguinte (a data é calculada automaticamente).</p>
           <p>• Dia integral = 1 diária · meio período = 0,5 diária.</p>
         </div>
       </Card>
