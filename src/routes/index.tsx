@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowRight, CalendarClock, Landmark, PiggyBank, Users, ClipboardList } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarClock, Landmark, Ruler, Users, ClipboardList } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Card, ProgressBar, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { workers, teams, attendance, receivables, payables, nextPayDate, cashBalance, contracts, workerDocuments, serviceOrders } = useStore();
+  const { workers, teams, attendance, receivables, payables, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
   const closureDate = (() => { const d = new Date(`${nextPayDate.date}T12:00:00`); d.setDate(d.getDate() - 1); return toISO(d); })();
@@ -86,6 +86,23 @@ function Dashboard() {
   const monthProduction = serviceOrders.filter((o) => o.service_date.startsWith(month) && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
   const todayProduction = serviceOrders.filter((o) => o.service_date === today && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
 
+  // Área cortada considera somente O.S. concluídas/realizadas e somente serviços medidos em m².
+  // Para O.S. com vários serviços, soma apenas a quantidade realmente executada de cada item em m².
+  const completedAreaM2 = serviceOrders
+    .filter((o) => o.status === "realizada")
+    .reduce((sum, order) => {
+      const items = order.items ?? [];
+      if (items.length) {
+        return sum + items.reduce((itemSum, item) => {
+          const type = item.service_type ?? serviceTypes.find((t) => t.id === item.service_type_id);
+          return itemSum + (type?.unit === "m2" ? Number(item.realized_quantity ?? 0) : 0);
+        }, 0);
+      }
+
+      const type = order.service_type ?? serviceTypes.find((t) => t.id === order.service_type_id);
+      return sum + (type?.unit === "m2" ? Number(order.realized_quantity ?? 0) : 0);
+    }, 0);
+
   const docAlerts = workerDocuments
     .filter((d) => d.expires_at && daysUntil(d.expires_at) <= 45)
     .map((d) => ({
@@ -125,11 +142,11 @@ function Dashboard() {
           icon={<CalendarClock className="size-4" />}
         />
         <StatCard
-          label="Saldo de caixa"
-          value={brl(cashBalance)}
-          sub="Saldo real consolidado"
+          label="Área cortada"
+          value={`${completedAreaM2.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m²`}
+          sub="Somente O.S. realizadas"
           tone="success"
-          icon={<PiggyBank className="size-4" />}
+          icon={<Ruler className="size-4" />}
         />
         <StatCard
           label="A receber (prefeitura)"
