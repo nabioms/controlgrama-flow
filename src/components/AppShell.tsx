@@ -60,7 +60,7 @@ export function AppShell({
 
   return (
     <div className="min-h-screen pb-24">
-      <header className="grass-gradient sticky top-0 z-20 px-4 py-3.5 text-white shadow-sm">
+      <header className="grass-gradient sticky top-0 z-20 px-4 py-2.5 text-white shadow-sm">
         <div className="mx-auto max-w-3xl">
           <div className="flex items-center justify-between gap-3">
             <Link
@@ -139,14 +139,17 @@ export function AppShell({
             </div>
           </div>
 
-          <div className="mt-3 border-t border-white/10 pt-3">
-            <h1 className="font-display text-xl font-semibold tracking-tight sm:text-2xl">
+          <div className="mt-2 flex min-h-6 items-center gap-2 border-t border-white/10 pt-2">
+            <h1 className="truncate font-display text-sm font-semibold tracking-tight sm:text-base">
               {title}
             </h1>
             {subtitle ? (
-              <p className="mt-0.5 max-w-2xl text-xs leading-5 text-white/75 sm:text-sm">
-                {subtitle}
-              </p>
+              <>
+                <span className="shrink-0 text-[10px] text-white/45">•</span>
+                <p className="min-w-0 truncate text-[10px] leading-4 text-white/70 sm:text-xs">
+                  {subtitle}
+                </p>
+              </>
             ) : null}
           </div>
         </div>
