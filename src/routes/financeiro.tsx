@@ -37,7 +37,7 @@ export const Route = createFileRoute("/financeiro")({
 const tabs = ["Resumo", "Receber", "Pagar", "Notas"] as const;
 
 function FinanceiroPage() {
-  const { receivables, payables, markReceived, markPayablePaid, addPayable, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
+  const { receivables, payables, payments, workers, attendance, markReceived, markPayablePaid, addPayable, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
   const [tab, setTab] = useState<(typeof tabs)[number]>("Resumo");
   const [form, setForm] = useState({
     description: "",
@@ -64,9 +64,32 @@ function FinanceiroPage() {
     Resultado: c.inflow - c.outflow,
   }));
 
+  // Mão de obra é calculada automaticamente pelas diárias/presenças do mês.
+  // O cálculo segue a mesma regra usada no fechamento da folha:
+  // diarista = dias trabalhados × diária; contratado = salário × dias/30.
+  const automaticLabor = attendance
+    .filter((a) => a.date.startsWith(month) && a.status === "presente")
+    .reduce((total, a) => {
+      const worker = workers.find((w) => w.id === a.worker_id);
+      if (!worker || worker.status === "desligado") return total;
+      const fraction = Number(a.work_fraction ?? 1);
+      const amount =
+        worker.employment_type === "diarista"
+          ? fraction * Number(worker.daily_rate ?? 0)
+          : (fraction * Number(worker.salary ?? 0)) / 30;
+      return total + amount;
+    }, 0);
+
+  const manualLabor = payables
+    .filter((p) => p.category === "mao_de_obra")
+    .reduce((s, p) => s + p.amount, 0);
+
   const byCategory = expenseCategories.map((c) => ({
     ...c,
-    total: payables.filter((p) => p.category === c.key).reduce((s, p) => s + p.amount, 0),
+    total:
+      c.key === "mao_de_obra"
+        ? manualLabor + automaticLabor
+        : payables.filter((p) => p.category === c.key).reduce((s, p) => s + p.amount, 0),
   }));
 
   const byContract = contracts.map((c) => {
