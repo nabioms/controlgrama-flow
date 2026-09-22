@@ -276,8 +276,17 @@ function ServiceOrdersPage() {
         <Button className="mt-3 w-full" disabled={saving || !teamId || !services.some((s) => s.service_type_id && parseQuantity(s.planned_quantity) > 0)} onClick={createOrder}><Plus className="size-4" /> Abrir O.S. com {services.filter((s) => s.service_type_id && Number(s.planned_quantity) > 0).length || 0} serviço(s)</Button>
       </Card>
 
-      <Card className="mb-5">
-        <SectionTitle title="Consultar O.S." hint="Consulte meses anteriores e filtre por serviço, equipe ou situação." />
+      <div className="mb-3 mt-8 flex items-center gap-2 px-1">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <ClipboardList className="size-4" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold tracking-tight">Consultar O.S.</h2>
+          <p className="text-xs text-muted-foreground">Histórico e filtros das ordens de serviço</p>
+        </div>
+      </div>
+
+      <Card className="mb-2">
         <div className="grid gap-3 sm:grid-cols-4">
           <label className="text-xs font-semibold">Mês<input className="input mt-1" type="month" value={filterMonth} onChange={(e) => setFilterMonth(e.target.value)} /></label>
           <label className="text-xs font-semibold">Serviço<select className="input mt-1" value={filterType} onChange={(e) => setFilterType(e.target.value)}><option value="all">Todos</option>{serviceTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
@@ -286,7 +295,15 @@ function ServiceOrdersPage() {
         </div>
       </Card>
 
-      <div className="mb-4 flex items-center justify-between gap-3"><SectionTitle title="Serviços cadastrados" hint="Valores unitários usados nas O.S." /><Button variant="outline" onClick={() => setShowTypes((v) => !v)}><Settings2 className="size-4" /> {showTypes ? "Fechar" : "Gerenciar"}</Button></div>
+      <div className="mb-3 mt-8 flex items-center justify-between gap-3 px-1">
+        <div>
+          <h2 className="text-base font-bold tracking-tight">Serviços cadastrados</h2>
+          <p className="text-xs text-muted-foreground">Valores unitários usados nas O.S.</p>
+        </div>
+        <Button variant="outline" onClick={() => setShowTypes((v) => !v)}>
+          <Settings2 className="size-4" /> {showTypes ? "Fechar" : "Gerenciar"}
+        </Button>
+      </div>
       {showTypes && <Card className="mb-5"><div className="grid gap-2 sm:grid-cols-[1fr_130px_150px_auto]"><input className="input" value={typeName} onChange={(e) => setTypeName(e.target.value)} placeholder="Nome do serviço" /><select className="input" value={typeUnit} onChange={(e) => setTypeUnit(e.target.value as ServiceUnit)}><option value="m2">m²</option><option value="km">km</option><option value="hora">hora</option><option value="unidade">unidade</option></select><input className="input" type="number" step="0.0001" min="0" value={typePrice} onChange={(e) => setTypePrice(e.target.value)} placeholder="Valor unitário" /><Button disabled={!typeName.trim() || Number(typePrice) < 0} onClick={createType}>Adicionar</Button></div><div className="mt-3 space-y-2">{serviceTypes.map((t) => <div key={t.id} className="flex items-center justify-between rounded-xl border p-3"><div><p className="text-sm font-semibold">{t.name}</p><p className="text-xs text-muted-foreground">{brl(Number(t.unit_price))}/{unitLabel[t.unit]}</p></div><Button variant="outline" onClick={() => updateServiceType(t.id, { active: !t.active })}>{t.active ? "Desativar" : "Ativar"}</Button></div>)}</div></Card>}
 
       <SectionTitle title={`O.S. de ${filterMonth}`} hint={`${filteredOrders.length} ordem(ns) encontrada(s)`} />
