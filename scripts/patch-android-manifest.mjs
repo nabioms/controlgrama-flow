@@ -9,10 +9,13 @@ let manifest = await readFile(manifestPath, "utf8");
 await mkdir("android/app/src/main/res/drawable", { recursive: true });
 await writeFile(iconPath, iconVector);
 
-if (!manifest.includes('android:icon="@drawable/ic_controlgrama"')) {
+const iconMarker = 'android:icon="@drawable/ic_controlgrama"';
+if (!manifest.includes(iconMarker)) {
+  const labelMarker = 'android:label="@string/app_name"';
+  if (!manifest.includes(labelMarker)) throw new Error("Android application label not found in AndroidManifest.xml");
   manifest = manifest.replace(
-    /(<application[^>]*?)android:label=/,
-    '$1android:icon="@drawable/ic_controlgrama" android:roundIcon="@drawable/ic_controlgrama" android:label='
+    labelMarker,
+    'android:icon="@drawable/ic_controlgrama"\\n        android:roundIcon="@drawable/ic_controlgrama"\\n        android:label="@string/app_name"'
   );
 }
 
