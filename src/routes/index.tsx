@@ -22,13 +22,14 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { workers, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments, serviceOrders } = useStore();
+  const { workers, teams, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments, serviceOrders } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
 
   const active = workers.filter((w) => w.status === "ativo");
   const diaristas = active.filter((w) => w.employment_type === "diarista");
   const clt = active.filter((w) => w.employment_type === "contratado");
+  const activeTeams = teams.filter((t) => t.active);
 
   const dayRows = attendance.filter((a) => a.date === today);
   const presentToday = dayRows.filter((a) => a.status === "presente").length;
@@ -79,8 +80,8 @@ function Dashboard() {
         <StatCard label="Produção no mês" value={brl(monthProduction)} sub="O.S. realizadas" tone="info" icon={<ClipboardList className="size-4" />} />
         <StatCard
           label="Equipe ativa"
-          value={String(active.length)}
-          sub={`${diaristas.length} diaristas · ${clt.length} CLT`}
+          value={String(activeTeams.length)}
+          sub={`${active.length} trabalhadores · ${diaristas.length} diaristas · ${clt.length} CLT`}
           tone="primary"
           icon={<Users className="size-4" />}
         />
