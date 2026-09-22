@@ -43,6 +43,9 @@ jobs:
       - name: Configure Android deep link
         run: node scripts/patch-android-manifest.mjs
 
+      - name: Validate Android manifest
+        run: python -c "import xml.etree.ElementTree as ET; ET.parse('android/app/src/main/AndroidManifest.xml')"
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug
