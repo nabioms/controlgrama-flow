@@ -135,8 +135,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    if(itemError){await supabase.from("service_orders").delete().eq("id",data.id);throw itemError;}
    const {error:teamError}=await supabase.from("service_order_workers").insert(memberIds.map(worker_id=>({service_order_id:data.id,worker_id})));
    if(teamError){await supabase.from("service_order_items").delete().eq("service_order_id",data.id);await supabase.from("service_orders").delete().eq("id",data.id);throw teamError;}
-   const createdItems:ServiceOrderItem[]=items.map((x,index)=>({id:"",service_order_id:data.id,service_type_id:x.type.id,planned_quantity:x.quantity,realized_quantity:null,unit_price:Number(x.type.unit_price),planned_amount:x.amount,realized_amount:0,created_at:"",updated_at:"",service_type:x.type}));
-   setServiceOrders(x=>[{...data,team,items:createdItems} as ServiceOrder,...x]);
+   await refresh();
  },[serviceTypes,teams]);
  const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>{
    const order=serviceOrders.find(o=>o.id===id); if(!order)throw new Error("O.S. não encontrada.");
