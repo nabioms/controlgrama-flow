@@ -139,11 +139,14 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    if(teamError){await supabase.from("service_order_items").delete().eq("service_order_id",data.id);await supabase.from("service_orders").delete().eq("id",data.id);throw teamError;}
    await refresh();
  },[serviceTypes,teams]);
- const updateServiceOrder=useCallback(async(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>{
+ const updateServiceOrder=useCallback(async(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>{
+   const order=serviceOrders.find(o=>o.id===id);
    const {error}=await supabase.rpc("update_service_order",{
      p_service_order_id:id,p_service_date:input.service_date,p_contract_id:input.contract_id||null,
      p_team_id:input.team_id,p_notes:input.notes||null,
-     p_items:(input.services||[]).map(x=>({service_type_id:x.service_type_id,planned_quantity:Number(x.planned_quantity)})),
+     p_items:(input.services||[]).map((x,index)=>order?.status==="realizada"
+       ? {item_id:(order.items||[])[index]?.id,realized_quantity:Number(x.realized_quantity ?? x.planned_quantity)}
+       : {service_type_id:x.service_type_id,planned_quantity:Number(x.planned_quantity)}),
    });
    if(error)throw error;
    await refresh();
