@@ -186,9 +186,9 @@ function FinanceiroPage() {
               <div key={r.id} className="card-surface p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold">{c?.number}</p>
+                    <p className="text-sm font-semibold">{c?.number || (r.service_order_id ? "Receita de O.S." : "Receita")}</p>
                     <p className="text-xs text-muted-foreground">
-                      Medição {r.reference_period} · previsto {formatDate(r.expected_date)}
+                      {r.reference_period} · previsto {formatDate(r.expected_date)}
                     </p>
                     {r.commitment_note ? (
                       <p className="text-xs text-muted-foreground">Empenho {r.commitment_note}</p>
