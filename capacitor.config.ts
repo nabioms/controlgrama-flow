@@ -3,7 +3,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "br.com.controlgrama.app",
   appName: "ControlGrama",
-  webDir: "dist",
+  webDir: ".output/public",
   android: {
     backgroundColor: "#f7faf8",
     allowMixedContent: false,
