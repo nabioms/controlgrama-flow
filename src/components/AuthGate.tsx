@@ -130,7 +130,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             <div className="mb-7 flex flex-col items-center">
               <div className="mb-2 flex h-[118px] w-full items-center justify-center">
                 <img
-                  src="/controlgrama-mark.svg"
+                  src="/controlgrama-login-mark.svg"
                   alt="ControlGrama"
                   className="h-[96px] w-[96px] object-contain"
                 />
