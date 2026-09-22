@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { FileText, Upload } from "lucide-react";
+import { useState } from "react";
+import { FileText, Pencil, Upload, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState, SectionTitle } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -30,6 +31,73 @@ function WorkerDetail() {
   const { workerId } = Route.useParams();
   const { workers, teams, attendance, payments, updateWorker, workerDocuments, workerEvents } = useStore();
   const worker = workers.find((w) => w.id === workerId);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    cpf: "",
+    rg: "",
+    phone: "",
+    address: "",
+    job_role: "roçador" as "roçador" | "motorista" | "encarregado" | "auxiliar" | "operador de máquina",
+    employment_type: "diarista" as "diarista" | "contratado",
+    daily_rate: "",
+    salary: "",
+    admission_date: "",
+    position: "",
+    weekly_hours: "",
+  });
+
+  function startEditing() {
+    if (!worker) return;
+    setEditError("");
+    setEditForm({
+      full_name: worker.full_name,
+      cpf: worker.cpf || "",
+      rg: worker.rg || "",
+      phone: worker.phone || "",
+      address: worker.address || "",
+      job_role: worker.job_role,
+      employment_type: worker.employment_type,
+      daily_rate: worker.daily_rate == null ? "" : String(worker.daily_rate),
+      salary: worker.salary == null ? "" : String(worker.salary),
+      admission_date: worker.admission_date || "",
+      position: worker.position || "",
+      weekly_hours: worker.weekly_hours == null ? "" : String(worker.weekly_hours),
+    });
+    setEditing(true);
+  }
+
+  async function saveEditing() {
+    if (!worker || !editForm.full_name.trim()) {
+      setEditError("Informe o nome completo.");
+      return;
+    }
+    setSaving(true);
+    setEditError("");
+    try {
+      await updateWorker(worker.id, {
+        full_name: editForm.full_name.trim(),
+        cpf: editForm.cpf.trim(),
+        rg: editForm.rg.trim(),
+        phone: editForm.phone.trim(),
+        address: editForm.address.trim(),
+        job_role: editForm.job_role,
+        employment_type: editForm.employment_type,
+        daily_rate: editForm.employment_type === "diarista" ? Number(editForm.daily_rate || 0) : null,
+        salary: editForm.employment_type === "contratado" ? Number(editForm.salary || 0) : null,
+        admission_date: editForm.employment_type === "contratado" ? (editForm.admission_date || null) : null,
+        position: editForm.employment_type === "contratado" ? (editForm.position.trim() || null) : null,
+        weekly_hours: editForm.employment_type === "contratado" ? Number(editForm.weekly_hours || 44) : null,
+      });
+      setEditing(false);
+    } catch (e: any) {
+      setEditError(e?.message || "Não foi possível salvar o cadastro.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (!worker) {
     return (
@@ -75,7 +143,10 @@ function WorkerDetail() {
           <div><dt className="text-muted-foreground">Admissão</dt><dd className="font-semibold">{formatDate(worker.admission_date)}</dd></div>
           <div className="col-span-2"><dt className="text-muted-foreground">Endereço</dt><dd className="font-semibold">{worker.address || "—"}</dd></div>
         </dl>
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={startEditing}>
+            <Pencil className="size-3.5" /> Editar cadastro
+          </Button>
           {worker.status === "ativo" ? (
             <>
               <Button size="sm" variant="outline" onClick={() => updateWorker(worker.id, { status: "afastado" })}>
@@ -107,6 +178,42 @@ function WorkerDetail() {
           </p>
         ) : null}
       </Card>
+
+      {editing ? (
+        <Card className="mb-4 border-primary/20">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <SectionTitle title="Editar cadastro" hint="As alterações são salvas diretamente no Supabase." />
+            <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setEditError(""); }}><X className="size-4" /></Button>
+          </div>
+          {editError ? <p className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive">{editError}</p> : null}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-xs font-medium">Nome completo</label>
+              <input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} />
+            </div>
+            <div><label className="text-xs font-medium">CPF</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.cpf} onChange={(e) => setEditForm({ ...editForm, cpf: e.target.value })} /></div>
+            <div><label className="text-xs font-medium">RG</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.rg} onChange={(e) => setEditForm({ ...editForm, rg: e.target.value })} /></div>
+            <div><label className="text-xs font-medium">Telefone</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            <div><label className="text-xs font-medium">Função</label><select className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.job_role} onChange={(e) => setEditForm({ ...editForm, job_role: e.target.value as typeof editForm.job_role })}>{["roçador", "motorista", "encarregado", "auxiliar", "operador de máquina"].map((role) => <option key={role} value={role}>{role}</option>)}</select></div>
+            <div className="sm:col-span-2"><label className="text-xs font-medium">Endereço</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></div>
+            <div><label className="text-xs font-medium">Vínculo</label><select className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.employment_type} onChange={(e) => setEditForm({ ...editForm, employment_type: e.target.value as typeof editForm.employment_type })}><option value="diarista">Diarista</option><option value="contratado">Contratado (CLT)</option></select></div>
+            {editForm.employment_type === "diarista" ? (
+              <div><label className="text-xs font-medium">Valor da diária (R$)</label><input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.daily_rate} onChange={(e) => setEditForm({ ...editForm, daily_rate: e.target.value })} /></div>
+            ) : (
+              <>
+                <div><label className="text-xs font-medium">Salário (R$)</label><input type="number" min="0" step="0.01" className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.salary} onChange={(e) => setEditForm({ ...editForm, salary: e.target.value })} /></div>
+                <div><label className="text-xs font-medium">Data de admissão</label><input type="date" className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.admission_date} onChange={(e) => setEditForm({ ...editForm, admission_date: e.target.value })} /></div>
+                <div><label className="text-xs font-medium">Cargo</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.position} onChange={(e) => setEditForm({ ...editForm, position: e.target.value })} /></div>
+                <div><label className="text-xs font-medium">Carga horária semanal</label><input type="number" min="0" step="1" className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.weekly_hours} onChange={(e) => setEditForm({ ...editForm, weekly_hours: e.target.value })} /></div>
+              </>
+            )}
+          </div>
+          <div className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => { setEditing(false); setEditError(""); }} disabled={saving}>Cancelar</Button>
+            <Button onClick={saveEditing} disabled={saving || !editForm.full_name.trim()}>{saving ? "Salvando..." : "Salvar alterações"}</Button>
+          </div>
+        </Card>
+      ) : null}
 
       {worker.employment_type === "contratado" ? (
         <Card className="mb-4">
