@@ -29,8 +29,8 @@ function DiariasPage() {
   const [periodId, setPeriodId] = useState<string>(paymentPeriods[0]?.id ?? "");
   const [method, setMethod] = useState<PaymentMethod>("pix");
 
-  const period = paymentPeriods.find((p) => p.id === periodId);\n  if (!period) {\n    return (\n      <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">\n        <EmptyState text="Nenhum período de pagamento cadastrado ainda." />\n      </AppShell>\n    );\n  }
-  const rows = payments.filter((p) => p.period_id === periodId);
+  const selectedPeriodId = periodId || paymentPeriods[0]?.id || "";\n  const period = paymentPeriods.find((p) => p.id === selectedPeriodId);\n  if (!period) {\n    return (\n      <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">\n        <EmptyState text="Nenhum período de pagamento cadastrado ainda." />\n      </AppShell>\n    );\n  }
+  const rows = payments.filter((p) => p.period_id === selectedPeriodId);
   const preview = workers
     .filter((w) => w.status !== "desligado")
     .map((w) => {
