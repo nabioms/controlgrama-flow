@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { BarChart3, CalendarCheck2, Home, Users, Wallet, FileText, Sprout } from "lucide-react";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 
 const navItems = [
   { to: "/", label: "Início", icon: Home },
@@ -20,7 +21,7 @@ export function AppShell({
   subtitle?: string;
   children: ReactNode;
 }) {
-  const { role, setRole } = useStore();
+  const { role } = useStore();
 
   return (
     <div className="min-h-screen pb-24">
@@ -42,12 +43,17 @@ export function AppShell({
               <FileText className="size-3.5" />
               Relatórios
             </Link>
-            <button
-              onClick={() => setRole(role === "admin" ? "encarregado" : "admin")}
-              className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold"
-            >
-              Perfil: {role === "admin" ? "Admin" : "Encarregado"}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold">
+                Perfil: {role === "admin" ? "Admin" : "Encarregado"}
+              </span>
+              <button
+                onClick={() => supabase.auth.signOut()}
+                className="rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold"
+              >
+                Sair
+              </button>
+            </div>
           </div>
         </div>
       </header>
