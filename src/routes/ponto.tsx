@@ -33,7 +33,7 @@ const toneFor = (s?: AttendanceStatus) =>
 function PontoPage() {
   const { workers, attendance, setAttendanceStatus, contracts } = useStore();
   const [date, setDate] = useState(toISO(new Date()));
-  const [contractId, setContractId] = useState<string>("ct-1");
+  const [contractId, setContractId] = useState<string>("");
   const [notes, setNotes] = useState("Frente Zona Norte");
   const [tab, setTab] = useState<"chamada" | "resumo">("chamada");
 
