@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { Trash2, Pencil } from "lucide-react";
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState } from "@/components/ui-kit";
@@ -102,9 +103,10 @@ const paymentCycles = (month: string) => {
 const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { workers, attendance, payments } = useStore();
+  const { workers, attendance, payments, setAttendanceStatus, deleteAttendance } = useStore();
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -315,26 +317,31 @@ function DiariasPage() {
               const amount = worked ? (selectedWorker.daily_rate ?? 0) * fraction : 0;
 
               return (
-                <div
+                <button
                   key={iso}
-                  className={`min-h-14 rounded-lg border p-1.5 ${
+                  type="button"
+                  onClick={() => setEditingDate(iso)}
+                  className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
                       ? "border-primary bg-primary-soft"
                       : "border-border bg-card"
                   }`}
+                  title={worked ? "Editar diária" : "Lançar diária"}
                 >
                   <p className="text-[10px] font-semibold">{day}</p>
                   {worked ? (
                     <>
-                      <p className="mt-1 text-[9px] font-semibold text-primary-deep">
+                      <p className="mt-1 truncate text-[8px] font-semibold leading-tight text-primary-deep">
                         {fraction === 0.5 ? "½ dia" : "dia"}
                       </p>
-                      <p className="text-[9px] font-semibold text-primary-deep">{brl(amount)}</p>
+                      <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-primary-deep" title={brl(amount)}>
+                        {brl(amount)}
+                      </p>
                     </>
                   ) : (
                     <p className="mt-2 text-[9px] text-muted-foreground">—</p>
                   )}
-                </div>
+                </button>
               );
             })}
           </div>
@@ -343,6 +350,78 @@ function DiariasPage() {
         <p className="text-xs text-muted-foreground">
           Dia integral = 100% da diária. Meio período = 50%. Falta, falta justificada e atestado = R$ 0.
         </p>
+
+        {editingDate ? (
+          <Card className="mt-4 p-3">
+            {(() => {
+              const current = detail.rowMap.get(editingDate);
+              const currentFraction = Number(current?.work_fraction ?? 1);
+              const workedNow = current?.status === "presente";
+              return (
+                <>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold">Editar diária</p>
+                      <p className="text-xs text-muted-foreground">{formatDate(editingDate)}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingDate(null)}
+                      className="text-xs font-semibold text-muted-foreground"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Button
+                      variant={workedNow && currentFraction === 1 ? "primary" : "soft"}
+                      onClick={async () => {
+                        await setAttendanceStatus(selectedWorker.id, editingDate, "presente", current?.notes ?? "", current?.contract_id ?? null, 1);
+                        setEditingDate(null);
+                      }}
+                    >
+                      Dia integral
+                    </Button>
+                    <Button
+                      variant={workedNow && currentFraction === 0.5 ? "primary" : "soft"}
+                      onClick={async () => {
+                        await setAttendanceStatus(selectedWorker.id, editingDate, "presente", current?.notes ?? "", current?.contract_id ?? null, 0.5);
+                        setEditingDate(null);
+                      }}
+                    >
+                      Meio período
+                    </Button>
+                  </div>
+                  <Button
+                    variant="soft"
+                    className="mt-2 w-full"
+                    onClick={async () => {
+                      await setAttendanceStatus(selectedWorker.id, editingDate, "falta", current?.notes ?? "", current?.contract_id ?? null, 0);
+                      setEditingDate(null);
+                    }}
+                  >
+                    Marcar como falta
+                  </Button>
+                  {current ? (
+                    <Button
+                      variant="soft"
+                      className="mt-2 w-full text-destructive"
+                      onClick={async () => {
+                        await deleteAttendance(current.id);
+                        setEditingDate(null);
+                      }}
+                    >
+                      <Trash2 className="size-4" /> Apagar lançamento
+                    </Button>
+                  ) : null}
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Toque em um dia do calendário para editar ou lançar a diária.
+                  </p>
+                </>
+              );
+            })()}
+          </Card>
+        ) : null
       </AppShell>
     );
   }
