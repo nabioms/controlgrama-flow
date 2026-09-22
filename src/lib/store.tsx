@@ -122,41 +122,11 @@ export function StoreProvider({children}:{children:ReactNode}){
    }).eq("id",id).select("*, service_type:service_types(*), contract:contracts(*)").single();
    if(error)throw error; setServiceOrders(x=>x.map(o=>o.id===id?data as ServiceOrder:o));
  },[serviceOrders]);
- const addServiceType=useCallback(async(name:string,unit:ServiceType["unit"],unitPrice:number)=>{
-   const {data,error}=await supabase.from("service_types").insert({name:name.trim(),unit,unit_price:unitPrice}).select("*").single();
-   if(error)throw error; setServiceTypes(x=>[data as ServiceType,...x]);
- },[]);
- const updateServiceType=useCallback(async(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>{
-   const {data,error}=await supabase.from("service_types").update(patch).eq("id",id).select("*").single();
-   if(error)throw error; setServiceTypes(x=>x.map(s=>s.id===id?data as ServiceType:s));
- },[]);
- const addServiceOrder=useCallback(async(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null})=>{
-   const type=serviceTypes.find(s=>s.id===input.service_type_id); if(!type)throw new Error("Tipo de serviço não encontrado.");
-   const quantity=Number(input.planned_quantity); if(!quantity || quantity<=0)throw new Error("Informe uma quantidade maior que zero.");
-   const {data:userData}=await supabase.auth.getUser();
-   const {data,error}=await supabase.from("service_orders").insert({
-     service_date:input.service_date,service_type_id:type.id,contract_id:input.contract_id||null,
-     planned_quantity:quantity,unit_price:type.unit_price,planned_amount:Math.round(quantity*type.unit_price*100)/100,
-     realized_quantity:null,realized_amount:0,status:"aberta",notes:input.notes||null,created_by:userData.user?.id||null
-   }).select("*, service_type:service_types(*), contract:contracts(*)").single();
-   if(error)throw error; setServiceOrders(x=>[data as ServiceOrder,...x]);
- },[serviceTypes]);
- const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>{
-   const order=serviceOrders.find(o=>o.id===id); if(!order)throw new Error("O.S. não encontrada.");
-   const quantity=status==="realizada"?(realizedQuantity==null?order.planned_quantity:Number(realizedQuantity)):0;
-   if(status==="realizada" && quantity<0)throw new Error("Quantidade realizada inválida.");
-   const amount=status==="realizada"?Math.round(quantity*order.unit_price*100)/100:0;
-   const {data,error}=await supabase.from("service_orders").update({
-     status,realized_quantity:status==="realizada"?quantity:null,realized_amount:amount,completed_at:new Date().toISOString()
-   }).eq("id",id).select("*, service_type:service_types(*), contract:contracts(*)").single();
-   if(error)throw error; setServiceOrders(x=>x.map(o=>o.id===id?data as ServiceOrder:o));
- },[serviceOrders]);
-
  const today=new Date(),yy=today.getFullYear(),mm=today.getMonth()+1;
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — fechamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — fechamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
  const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,openingBalance,loading,error,refresh,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,serviceTypes,serviceOrders,next.date,next.label]);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addServiceType,updateServiceType,addServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,openingBalance,loading,error,refresh,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,finalizeServiceOrder,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}
