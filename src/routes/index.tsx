@@ -60,7 +60,7 @@ function Dashboard() {
       return toISO(previousMonthDate);
     }
 
-    const currentMonthDate = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 20);
+    const currentMonthDate = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 21);
     return toISO(currentMonthDate);
   })();
 
