@@ -29,7 +29,15 @@ function DiariasPage() {
   const [periodId, setPeriodId] = useState<string>(paymentPeriods[0]?.id ?? "");
   const [method, setMethod] = useState<PaymentMethod>("pix");
 
-  const selectedPeriodId = periodId || paymentPeriods[0]?.id || "";\n  const period = paymentPeriods.find((p) => p.id === selectedPeriodId);\n  if (!period) {\n    return (\n      <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">\n        <EmptyState text="Nenhum período de pagamento cadastrado ainda." />\n      </AppShell>\n    );\n  }
+  const selectedPeriodId = periodId || paymentPeriods[0]?.id || "";
+  const period = paymentPeriods.find((p) => p.id === selectedPeriodId);
+  if (!period) {
+    return (
+      <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">
+        <EmptyState text="Nenhum período de pagamento cadastrado ainda." />
+      </AppShell>
+    );
+  }
   const rows = payments.filter((p) => p.period_id === selectedPeriodId);
   const preview = workers
     .filter((w) => w.status !== "desligado")
@@ -55,7 +63,7 @@ function DiariasPage() {
   return (
     <AppShell title="Diárias e folha" subtitle="Dois ciclos de pagamento por mês">
       <Card className="mb-4 space-y-3">
-        <Select value={periodId} onChange={(e) => setPeriodId(e.target.value)}>
+        <Select value={selectedPeriodId} onChange={(e) => setPeriodId(e.target.value)}>
           {paymentPeriods.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label} — paga em {formatDate(p.pay_date)}
