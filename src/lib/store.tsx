@@ -36,13 +36,18 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("worker_events").select("*").order("date",{ascending:false}),supabase.from("attendance").select("*").order("date",{ascending:false}),
    supabase.from("payment_periods").select("*").order("pay_date",{ascending:false}),supabase.from("payments").select("*").order("created_at",{ascending:false}),
    supabase.from("receivables").select("*").order("expected_date"),supabase.from("payables").select("*").order("due_date"),
-   supabase.from("cash_flow_monthly").select("*").order("month"),supabase.from("cash_settings").select("opening_balance").eq("id",true).maybeSingle()
+   supabase.from("cash_settings").select("opening_balance").eq("id",true).maybeSingle()
   ]);
   const bad=q.find(x=>x.error); if(bad?.error){setError(bad.error.message);setLoading(false);return;}
-  const [pr,w,c,cat,inv,docs,events,att,periods,pay,rec,pb,flow,settings]=q;
+  const [pr,w,c,cat,inv,docs,events,att,periods,pay,rec,pb,settings]=q;
   setRole((pr.data?.role as UserRole)||"encarregado");setWorkers((w.data||[]).map(worker));setContracts(c.data||[]);setExpenseCategories(cat.data||[]);
   setInvoices(inv.data||[]);setWorkerDocuments(docs.data||[]);setWorkerEvents(events.data||[]);setAttendance(att.data||[]);setPaymentPeriods(periods.data||[]);
-  setPayments((pay.data||[]).map(payment));setReceivables((rec.data||[]).map(receivable));setPayables((pb.data||[]).map(payable));setCashFlowHistory(flow.data||[]);
+  setPayments((pay.data||[]).map(payment));setReceivables((rec.data||[]).map(receivable));setPayables((pb.data||[]).map(payable));
+  const flowMap:Record<string,{month:string;inflow:number;outflow:number}>={};
+  (rec.data||[]).filter((x:any)=>x.status==="recebido").forEach((x:any)=>{const m=String(x.received_at||x.expected_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].inflow+=Number(x.expected_amount||0)});
+  (pb.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.due_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
+  (pay.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.created_at).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.gross_amount||0)});
+  setCashFlowHistory(Object.values(flowMap).sort((a,b)=>a.month.localeCompare(b.month)));
   setOpeningBalance(Number(settings.data?.opening_balance||0));setLoading(false);
  },[]);
  useEffect(()=>{refresh()},[refresh]);
