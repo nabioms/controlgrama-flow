@@ -74,7 +74,7 @@ function PontoPage() {
     active.forEach((w) => setAttendanceStatus(w.id, date, "presente", notes, contractId, 1));
 
   return (
-    <AppShell title="Chamada do dia" subtitle={formatDate(date)}>
+    <AppShell title="Chamada do dia" subtitle={date ? formatDate(date) : "Carregando data..."}>
       <div className="mb-4 flex gap-1 rounded-xl bg-muted p-1">
         {(["chamada", "resumo"] as const).map((t) => (
           <button
@@ -134,7 +134,7 @@ function PontoPage() {
               const current = row?.status;
               const fraction = Number(row?.work_fraction ?? 1);
               const isDiarista = w.employment_type === "diarista";
-              const todayAmount = isDiarista && current === "presente" ? (w.daily_rate ?? 0) * fraction;
+              const todayAmount = isDiarista && current === "presente" ? (w.daily_rate ?? 0) * fraction : 0;
               return (
                 <div key={w.id} className="card-surface p-3">
                   <div className="mb-2.5 flex items-center gap-3">
