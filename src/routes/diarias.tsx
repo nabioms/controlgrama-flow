@@ -1,245 +1,407 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, Paperclip } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { Avatar, Badge, Button, Card, EmptyState, SectionTitle, Select } from "@/components/ui-kit";
+import { Avatar, Badge, Button, Card, EmptyState } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
 import { brl, formatDate, initials } from "@/lib/format";
-import type { PaymentMethod } from "@/lib/types";
+import type { Attendance, Worker } from "@/lib/types";
 
 export const Route = createFileRoute("/diarias")({
   head: () => ({
     meta: [
-      { title: "Diárias e folha — ControlGrama" },
+      { title: "Diárias — ControlGrama" },
       {
         name: "description",
-        content: "Fechamento de diárias no 5º dia útil e adiantamento no dia 20, com cálculo automático por dias trabalhados.",
+        content: "Controle de dias trabalhados e valores a receber de cada diarista.",
       },
-      { property: "og:title", content: "Diárias e folha — ControlGrama" },
-      { property: "og:description", content: "Cálculo, fechamento e baixa de pagamentos de diaristas e CLT." },
     ],
   }),
   component: DiariasPage,
 });
 
-const methods: PaymentMethod[] = ["pix", "dinheiro", "transferencia"];
+const pad = (value: number) => String(value).padStart(2, "0");
+
+const monthToDate = (month: string, day: number) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return `${year}-${pad(monthNumber)}-${pad(day)}`;
+};
+
+const shiftMonth = (month: string, amount: number) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const d = new Date(year, monthNumber - 1 + amount, 1);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+};
+
+const monthTitle = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+};
+
+const nextMonth = (month: string) => shiftMonth(month, 1);
+
+const paymentCycles = (month: string) => {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const next = new Date(year, monthNumber, 1);
+  return {
+    firstHalf: {
+      start: monthToDate(month, 1),
+      end: monthToDate(month, 15),
+      label: "Dia 20",
+      description: "1ª quinzena",
+      payDate: monthToDate(month, 20),
+    },
+    secondHalf: {
+      start: monthToDate(month, 16),
+      end: monthToDate(month, new Date(year, monthNumber, 0).getDate()),
+      label: "5º dia útil",
+      description: "2ª quinzena",
+      payDate: null as string | null,
+      nextMonthYear: next.getFullYear(),
+      nextMonthNumber: next.getMonth() + 1,
+    },
+  };
+};
+
+const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { paymentPeriods, payments, workers, closePeriod, markPaymentPaid, attendance } = useStore();
-  const [periodId, setPeriodId] = useState<string>(paymentPeriods[0]?.id ?? "");
-  const [method, setMethod] = useState<PaymentMethod>("pix");
+  const { workers, attendance, payments } = useStore();
   const [month, setMonth] = useState("");
+  const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
 
   useEffect(() => {
     const now = new Date();
-    setMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+    setMonth(`${now.getFullYear()}-${pad(now.getMonth() + 1)}`);
   }, []);
 
-  const monthlyAccrual = useMemo(() => {
+  const diaristas = useMemo(
+    () =>
+      workers.filter(
+        (worker) =>
+          worker.status !== "desligado" && worker.employment_type === "diarista",
+      ),
+    [workers],
+  );
+
+  const selectedWorker = diaristas.find((worker) => worker.id === selectedWorkerId) ?? null;
+
+  const attendanceByWorker = useMemo(() => {
+    const map = new Map<string, Attendance[]>();
+    attendance.forEach((row) => {
+      const rows = map.get(row.worker_id) ?? [];
+      rows.push(row);
+      map.set(row.worker_id, rows);
+    });
+    return map;
+  }, [attendance]);
+
+  const getMonthRows = (worker: Worker, targetMonth: string) =>
+    (attendanceByWorker.get(worker.id) ?? []).filter(
+      (row) => row.date.startsWith(targetMonth) && isWorked(row),
+    );
+
+  const monthData = useMemo(() => {
     if (!month) return [];
-    return workers
-      .filter((w) => w.status !== "desligado" && w.employment_type === "diarista")
-      .map((w) => {
-        const workedDays = attendance
-          .filter((a) => a.worker_id === w.id && a.status === "presente" && a.date.startsWith(month))
-          .reduce((sum, a) => sum + Number(a.work_fraction ?? 1), 0);
-        return {
-          worker: w,
-          workedDays,
-          amount: Math.round(workedDays * (w.daily_rate ?? 0) * 100) / 100,
-        };
-      });
-  }, [month, workers, attendance]);
+    return diaristas.map((worker) => {
+      const rows = getMonthRows(worker, month);
+      const days = rows.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
+      return {
+        worker,
+        rows,
+        days,
+        amount: Math.round(days * (worker.daily_rate ?? 0) * 100) / 100,
+      };
+    });
+  }, [month, diaristas, attendanceByWorker]);
 
-  const monthlyTotal = monthlyAccrual.reduce((sum, r) => sum + r.amount, 0);
+  const totalMonth = monthData.reduce((sum, row) => sum + row.amount, 0);
 
-  const selectedPeriodId = periodId || paymentPeriods[0]?.id || "";
-  const period = paymentPeriods.find((p) => p.id === selectedPeriodId);
-  if (!period) {
+  const detail = useMemo(() => {
+    if (!selectedWorker || !month) return null;
+
+    const rows = getMonthRows(selectedWorker, month);
+    const rowMap = new Map(rows.map((row) => [row.date, row]));
+    const cycles = paymentCycles(month);
+
+    const firstRows = rows.filter(
+      (row) => row.date >= cycles.firstHalf.start && row.date <= cycles.firstHalf.end,
+    );
+    const secondRows = rows.filter(
+      (row) => row.date >= cycles.secondHalf.start && row.date <= cycles.secondHalf.end,
+    );
+
+    const sumRows = (items: Attendance[]) => {
+      const days = items.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
+      return {
+        days,
+        amount: Math.round(days * (selectedWorker.daily_rate ?? 0) * 100) / 100,
+      };
+    };
+
+    const first = sumRows(firstRows);
+    const second = sumRows(secondRows);
+    const daysInMonth = new Date(
+      Number(month.slice(0, 4)),
+      Number(month.slice(5, 7)),
+      0,
+    ).getDate();
+
+    const [year, monthNumber] = month.split("-").map(Number);
+    const firstWeekday = (new Date(year, monthNumber - 1, 1).getDay() + 6) % 7;
+
+    return {
+      rowMap,
+      rows,
+      first,
+      second,
+      totalDays: first.days + second.days,
+      totalAmount: first.amount + second.amount,
+      daysInMonth,
+      firstWeekday,
+      cycles,
+    };
+  }, [selectedWorker, month, attendanceByWorker]);
+
+  if (!month) {
     return (
-      <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">
-        <Card className="mb-4">
-          <p className="text-[11px] font-semibold uppercase text-primary-deep">Acumulado de diárias</p>
-          <div className="mt-1 flex items-end justify-between gap-3">
-            <div>
-              <p className="font-display text-2xl font-semibold">{brl(monthlyTotal)}</p>
-              <p className="text-xs text-muted-foreground">Presenças registradas no mês</p>
-            </div>
-            <Badge tone="warning">Período ainda não aberto</Badge>
-          </div>
-        </Card>
-
-        <SectionTitle
-          title="Acumulado por diarista"
-          hint="Presença gera valor; falta, justificada e atestado geram R$ 0. Meio período vale 50% da diária."
-        />
-        {monthlyAccrual.length === 0 ? (
-          <EmptyState text="Nenhum diarista ativo cadastrado." />
-        ) : (
-          <div className="space-y-2">
-            {monthlyAccrual.map((r) => (
-              <div key={r.worker.id} className="card-surface flex items-center gap-3 p-3">
-                <Avatar text={initials(r.worker.full_name)} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{r.worker.full_name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {r.workedDays.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias × {brl(r.worker.daily_rate ?? 0)}
-                  </p>
-                </div>
-                <p className="text-sm font-semibold">{brl(r.amount)}</p>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="mt-4 text-xs text-muted-foreground">
-          O valor fica apenas acumulado até o fechamento. Depois do fechamento vira pagamento pendente; só entra no caixa quando for marcado como pago.
-        </p>
+      <AppShell title="Diárias" subtitle="Carregando calendário...">
+        <Card />
       </AppShell>
     );
   }
-  const rows = payments.filter((p) => p.period_id === selectedPeriodId);
-  const preview = workers
-    .filter((w) => w.status !== "desligado")
-    .map((w) => {
-      const days = attendance
-        .filter(
-          (a) =>
-            a.worker_id === w.id &&
-            a.status === "presente" &&
-            a.date >= period.start_date &&
-            a.date <= period.end_date,
-        )
-        .reduce((sum, a) => sum + Number(a.work_fraction ?? 1), 0);
-      const rate = w.employment_type === "diarista" ? (w.daily_rate ?? 0) : (w.salary ?? 0) / 30;
-      return { worker: w, days, amount: Math.round(days * rate * 100) / 100 };
-    })
-    .filter((r) => r.days > 0);
 
-  const total = (rows.length ? rows.map((r) => r.gross_amount) : preview.map((p) => p.amount)).reduce(
-    (a, b) => a + b,
-    0,
-  );
-  const pending = rows.filter((r) => r.status === "pendente");
+  if (selectedWorker && detail) {
+    const nextPay = detail.cycles.secondHalf.nextMonthNumber;
+    const nextPayMonth = `${detail.cycles.secondHalf.nextMonthYear}-${pad(nextPay)}`;
 
-  return (
-    <AppShell title="Diárias e folha" subtitle="Dois ciclos de pagamento por mês">
-      <Card className="mb-4 space-y-3">
-        <Select value={selectedPeriodId} onChange={(e) => setPeriodId(e.target.value)}>
-          {paymentPeriods.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label} — paga em {formatDate(p.pay_date)}
-            </option>
-          ))}
-        </Select>
-        <div className="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Período</p>
-            <p className="text-xs font-semibold">
-              {formatDate(period.start_date)} a {formatDate(period.end_date)}
-            </p>
+    return (
+      <AppShell title="Diárias" subtitle={selectedWorker.full_name}>
+        <button
+          type="button"
+          onClick={() => setSelectedWorkerId(null)}
+          className="mb-3 flex items-center gap-2 text-sm font-semibold text-primary"
+        >
+          <ArrowLeft className="size-4" /> Voltar para diaristas
+        </button>
+
+        <Card className="mb-4">
+          <div className="flex items-center gap-3">
+            <Avatar text={initials(selectedWorker.full_name)} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-base font-semibold">{selectedWorker.full_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {selectedWorker.job_role} · {brl(selectedWorker.daily_rate ?? 0)} por dia
+              </p>
+            </div>
+            <Badge tone="success">ativo</Badge>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Ciclo</p>
-            <p className="text-xs font-semibold">
-              {period.cycle === "quinto_dia_util" ? "5º dia útil" : "Dia 20"}
-            </p>
+        </Card>
+
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setMonth(shiftMonth(month, -1))}
+            className="rounded-xl border border-border p-2"
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <div className="text-center">
+            <p className="font-display text-lg font-semibold capitalize">{monthTitle(month)}</p>
+            <p className="text-xs text-muted-foreground">Dias trabalhados e valores</p>
           </div>
-          <div>
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Status</p>
-            <Badge tone={period.status === "pago" ? "success" : period.status === "fechado" ? "warning" : "neutral"}>
-              {period.status}
-            </Badge>
-          </div>
+          <button
+            type="button"
+            onClick={() => setMonth(shiftMonth(month, 1))}
+            className="rounded-xl border border-border p-2"
+            aria-label="Próximo mês"
+          >
+            <ChevronRight className="size-4" />
+          </button>
         </div>
-        <div className="rounded-xl bg-primary-soft p-3">
-          <p className="text-[11px] font-semibold uppercase text-primary-deep">Total do período</p>
-          <p className="font-display text-2xl font-semibold text-primary-deep">{brl(total)}</p>
-        </div>
-        {period.status === "aberto" ? (
-          <Button className="w-full" onClick={() => closePeriod(period.id)}>
-            <Banknote className="size-4" /> Fechar período e gerar pagamentos
-          </Button>
-        ) : null}
-      </Card>
 
-      {rows.length > 0 ? (
-        <>
-          <SectionTitle
-            title="Pagamentos"
-            hint={`${pending.length} pendentes de ${rows.length}`}
-            action={
-              <Select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod)} className="w-auto py-1.5 text-xs">
-                {methods.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </Select>
-            }
-          />
-          <div className="space-y-2">
-            {rows.map((p) => {
-              const w = workers.find((x) => x.id === p.worker_id);
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <Card className="p-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Dias</p>
+            <p className="font-display text-2xl font-semibold">
+              {detail.totalDays.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
+            </p>
+          </Card>
+          <Card className="p-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">A receber</p>
+            <p className="font-display text-2xl font-semibold text-primary-deep">{brl(detail.totalAmount)}</p>
+          </Card>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <Card className="p-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+              Dia 20 · 1ª quinzena
+            </p>
+            <p className="mt-1 font-display text-xl font-semibold">{brl(detail.first.amount)}</p>
+            <p className="text-xs text-muted-foreground">
+              {detail.first.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias · 01–15
+            </p>
+          </Card>
+          <Card className="p-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+              5º dia útil · 2ª quinzena
+            </p>
+            <p className="mt-1 font-display text-xl font-semibold">{brl(detail.second.amount)}</p>
+            <p className="text-xs text-muted-foreground">
+              {detail.second.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias · 16–{detail.daysInMonth}
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground">Pagamento no 5º dia útil de {monthTitle(nextPayMonth)}</p>
+          </Card>
+        </div>
+
+        <Card className="mb-4 p-3">
+          <div className="mb-3 flex items-center gap-2">
+            <CalendarDays className="size-4 text-primary" />
+            <div>
+              <p className="text-sm font-semibold">Calendário de trabalho</p>
+              <p className="text-[11px] text-muted-foreground">Toque em um dia trabalhado para conferir o valor.</p>
+            </div>
+          </div>
+
+          <div className="mb-2 grid grid-cols-7 text-center text-[9px] font-semibold uppercase text-muted-foreground">
+            {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((day) => (
+              <span key={day}>{day}</span>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: detail.firstWeekday }).map((_, index) => (
+              <div key={`empty-${index}`} className="min-h-14 rounded-lg bg-muted/30" />
+            ))}
+            {Array.from({ length: detail.daysInMonth }, (_, index) => {
+              const day = index + 1;
+              const iso = monthToDate(month, day);
+              const row = detail.rowMap.get(iso);
+              const fraction = Number(row?.work_fraction ?? 1);
+              const worked = isWorked(row);
+              const amount = worked ? (selectedWorker.daily_rate ?? 0) * fraction : 0;
+
               return (
-                <div key={p.id} className="card-surface p-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar text={initials(w?.full_name ?? "?")} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{w?.full_name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {p.worked_days} dias{p.daily_rate ? ` × ${brl(p.daily_rate)}` : " (proporcional CLT)"}
+                <div
+                  key={iso}
+                  className={`min-h-14 rounded-lg border p-1.5 ${
+                    worked
+                      ? "border-primary bg-primary-soft"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  <p className="text-[10px] font-semibold">{day}</p>
+                  {worked ? (
+                    <>
+                      <p className="mt-1 text-[9px] font-semibold text-primary-deep">
+                        {fraction === 0.5 ? "½ dia" : "dia"}
                       </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold">{brl(p.gross_amount)}</p>
-                      <Badge tone={p.status === "pago" ? "success" : "warning"}>{p.status}</Badge>
-                    </div>
-                  </div>
-                  {p.status === "pendente" ? (
-                    <div className="mt-2.5 flex gap-2">
-                      <Button size="sm" className="flex-1" onClick={() => markPaymentPaid(p.id, method)}>
-                        Marcar como pago ({method})
-                      </Button>
-                      <Button size="sm" variant="outline">
-                        <Paperclip className="size-3.5" /> Comprovante
-                      </Button>
-                    </div>
+                      <p className="text-[9px] font-semibold text-primary-deep">{brl(amount)}</p>
+                    </>
                   ) : (
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Pago em {formatDate(p.paid_at)} · {p.method}
-                    </p>
+                    <p className="mt-2 text-[9px] text-muted-foreground">—</p>
                   )}
                 </div>
               );
             })}
           </div>
-        </>
+        </Card>
+
+        <p className="text-xs text-muted-foreground">
+          Dia integral = 100% da diária. Meio período = 50%. Falta, falta justificada e atestado = R$ 0.
+        </p>
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell title="Diárias" subtitle="Controle dos dias trabalhados">
+      <Card className="mb-4 p-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="size-4 text-primary" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase text-primary-deep">Folha de diárias</p>
+            <p className="text-sm font-semibold capitalize">{monthTitle(month)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-muted-foreground">Total acumulado</p>
+            <p className="text-sm font-bold text-primary-deep">{brl(totalMonth)}</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+          <button
+            type="button"
+            onClick={() => setMonth(shiftMonth(month, -1))}
+            className="rounded-lg border border-border p-1.5"
+          >
+            <ChevronLeft className="size-4" />
+          </button>
+          <span className="text-xs text-muted-foreground">Mude o mês para consultar o histórico</span>
+          <button
+            type="button"
+            onClick={() => setMonth(shiftMonth(month, 1))}
+            className="rounded-lg border border-border p-1.5"
+          >
+            <ChevronRight className="size-4" />
+          </button>
+        </div>
+      </Card>
+
+      <div className="mb-3">
+        <p className="text-sm font-semibold">Seus diaristas</p>
+        <p className="text-xs text-muted-foreground">Toque no nome para abrir o calendário e os valores de cada dia.</p>
+      </div>
+
+      {diaristas.length === 0 ? (
+        <EmptyState text="Nenhum diarista ativo cadastrado." />
       ) : (
-        <>
-          <SectionTitle title="Prévia do cálculo" hint="Dia integral = 1 diária · meio período = 0,5 diária" />
-          {preview.length === 0 ? (
-            <EmptyState text="Nenhum dia trabalhado registrado neste período." />
-          ) : (
-            <div className="space-y-2">
-              {preview.map((r) => (
-                <div key={r.worker.id} className="card-surface flex items-center gap-3 p-3">
-                  <Avatar text={initials(r.worker.full_name)} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{r.worker.full_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {r.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias ·{" "}
-                      {r.worker.employment_type === "diarista"
-                        ? brl(r.worker.daily_rate ?? 0) + "/dia"
-                        : "CLT proporcional"}
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold">{brl(r.amount)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        <div className="space-y-2">
+          {monthData.map((item) => (
+            <button
+              key={item.worker.id}
+              type="button"
+              onClick={() => setSelectedWorkerId(item.worker.id)}
+              className="card-surface flex w-full items-center gap-3 p-3 text-left transition-transform active:scale-[0.99]"
+            >
+              <Avatar text={initials(item.worker.full_name)} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{item.worker.full_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {item.worker.job_role} · {item.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold text-primary-deep">{brl(item.amount)}</p>
+                <p className="text-[10px] text-muted-foreground">a receber</p>
+              </div>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+          ))}
+        </div>
       )}
+
+      <Card className="mt-4 p-3">
+        <p className="text-xs font-semibold">Como o pagamento é calculado</p>
+        <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+          <p>• Dias 01–15 → pagamento no dia 20.</p>
+          <p>• Dias 16–fim do mês → pagamento no 5º dia útil do mês seguinte.</p>
+          <p>• Dia integral = 1 diária · meio período = 0,5 diária.</p>
+        </div>
+      </Card>
+
+      {payments.length > 0 ? (
+        <Card className="mt-4 p-3">
+          <p className="text-xs font-semibold">Pagamentos já fechados</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {payments.filter((payment) => payment.status === "pendente").length} pagamento(s) pendente(s) de baixa.
+          </p>
+        </Card>
+      ) : null}
     </AppShell>
   );
 }
