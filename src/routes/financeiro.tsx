@@ -15,7 +15,7 @@ import { Plus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, SectionTitle, Select, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { cashFlowHistory, contracts, expenseCategories, invoices } from "@/lib/mock-data";
+
 import { brl, formatDate, monthLabel, shortBrl, toISO } from "@/lib/format";
 import type { ExpenseCategoryKey } from "@/lib/types";
 
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/financeiro")({
 const tabs = ["Resumo", "Receber", "Pagar", "Notas"] as const;
 
 function FinanceiroPage() {
-  const { receivables, payables, markReceived, markPayablePaid, addPayable, cashBalance } = useStore();
+  const { receivables, payables, markReceived, markPayablePaid, addPayable, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
   const [tab, setTab] = useState<(typeof tabs)[number]>("Resumo");
   const [form, setForm] = useState({
     description: "",
