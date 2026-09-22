@@ -25,6 +25,7 @@ function Dashboard() {
   const { workers, teams, attendance, receivables, payables, nextPayDate, cashBalance, paymentPeriods, contracts, workerDocuments, serviceOrders } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
+  const closureDate = (() => { const d = new Date(`${nextPayDate.date}T12:00:00`); d.setDate(d.getDate() - 1); return toISO(d); })();
 
   const active = workers.filter((w) => w.status === "ativo");
   const diaristas = active.filter((w) => w.employment_type === "diarista");
@@ -117,6 +118,9 @@ function Dashboard() {
             <p className="font-display mt-1 text-2xl font-semibold">{brl(estimated)}</p>
             <p className="mt-0.5 text-xs opacity-85">
               {nextPayDate.label} · {formatDate(nextPayDate.date)}
+            </p>
+            <p className="mt-0.5 text-[11px] opacity-75">
+              Fechamento · {formatDate(closureDate)}
             </p>
           </div>
           <div className="rounded-2xl bg-white/15 px-3 py-2 text-center">
