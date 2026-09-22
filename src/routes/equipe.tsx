@@ -91,7 +91,7 @@ function EquipePage() {
         <>
           <div className="mb-4 flex items-center justify-between gap-3">
             <SectionTitle title="Equipes de trabalho" hint="Cada equipe possui um encarregado e seus integrantes." />
-            <Button size="sm" onClick={() => setOpenTeam((v) => !v)}><Plus className="size-4" /> Nova</Button>
+            <Button size="sm" onClick={() => { setOpenTeam(true); setError(""); }}><Plus className="size-4" /> Cadastrar equipe</Button>
           </div>
 
           {openTeam ? (
@@ -190,7 +190,7 @@ function EquipePage() {
                 </Card>
               );
             })}
-            {!teams.length ? <Card><p className="text-sm font-semibold">Nenhuma equipe criada.</p><p className="mt-1 text-xs text-muted-foreground">Crie a Equipe Alpha, por exemplo, e depois habilite os trabalhadores nela.</p></Card> : null}
+            {!teams.length ? <Card className="border-dashed"><p className="text-sm font-semibold">Nenhuma equipe criada.</p><p className="mt-1 text-xs text-muted-foreground">Cadastre sua primeira equipe para depois definir o encarregado e os integrantes.</p><Button className="mt-3" size="sm" onClick={() => { setOpenTeam(true); setError(""); }}><Plus className="size-4" /> Cadastrar primeira equipe</Button></Card> : null}
           </div>
         </>
       ) : (
