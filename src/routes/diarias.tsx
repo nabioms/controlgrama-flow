@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Trash2, Pencil } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState } from "@/components/ui-kit";
@@ -421,7 +421,7 @@ function DiariasPage() {
               );
             })()}
           </Card>
-        ) : null
+        ) : null}
       </AppShell>
     );
   }
