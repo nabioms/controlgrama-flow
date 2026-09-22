@@ -79,7 +79,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   setAttendance(x=>[data,...x.filter(a=>!(a.worker_id===workerId&&a.date===dateValue))]);
 },[]);
  const deleteAttendance=useCallback(async(id:string)=>{
-  const {error}=await supabase.from("attendance").delete().eq("id",id);
+  const {error}=await supabase.rpc("delete_attendance",{p_attendance_id:id});
   if(error)throw error;
   setAttendance(x=>x.filter(a=>a.id!==id));
  },[]);
