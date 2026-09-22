@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Banknote, Paperclip } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState, SectionTitle, Select } from "@/components/ui-kit";
@@ -28,13 +28,72 @@ function DiariasPage() {
   const { paymentPeriods, payments, workers, closePeriod, markPaymentPaid, attendance } = useStore();
   const [periodId, setPeriodId] = useState<string>(paymentPeriods[0]?.id ?? "");
   const [method, setMethod] = useState<PaymentMethod>("pix");
+  const [month, setMonth] = useState("");
+
+  useEffect(() => {
+    const now = new Date();
+    setMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  }, []);
+
+  const monthlyAccrual = useMemo(() => {
+    if (!month) return [];
+    return workers
+      .filter((w) => w.status !== "desligado" && w.employment_type === "diarista")
+      .map((w) => {
+        const workedDays = attendance
+          .filter((a) => a.worker_id === w.id && a.status === "presente" && a.date.startsWith(month))
+          .reduce((sum, a) => sum + Number(a.work_fraction ?? 1), 0);
+        return {
+          worker: w,
+          workedDays,
+          amount: Math.round(workedDays * (w.daily_rate ?? 0) * 100) / 100,
+        };
+      });
+  }, [month, workers, attendance]);
+
+  const monthlyTotal = monthlyAccrual.reduce((sum, r) => sum + r.amount, 0);
 
   const selectedPeriodId = periodId || paymentPeriods[0]?.id || "";
   const period = paymentPeriods.find((p) => p.id === selectedPeriodId);
   if (!period) {
     return (
       <AppShell title="Diárias e folha" subtitle="Fechamento e pagamentos">
-        <EmptyState text="Nenhum período de pagamento cadastrado ainda." />
+        <Card className="mb-4">
+          <p className="text-[11px] font-semibold uppercase text-primary-deep">Acumulado de diárias</p>
+          <div className="mt-1 flex items-end justify-between gap-3">
+            <div>
+              <p className="font-display text-2xl font-semibold">{brl(monthlyTotal)}</p>
+              <p className="text-xs text-muted-foreground">Presenças registradas no mês</p>
+            </div>
+            <Badge tone="warning">Período ainda não aberto</Badge>
+          </div>
+        </Card>
+
+        <SectionTitle
+          title="Acumulado por diarista"
+          hint="Presença gera valor; falta, justificada e atestado geram R$ 0. Meio período vale 50% da diária."
+        />
+        {monthlyAccrual.length === 0 ? (
+          <EmptyState text="Nenhum diarista ativo cadastrado." />
+        ) : (
+          <div className="space-y-2">
+            {monthlyAccrual.map((r) => (
+              <div key={r.worker.id} className="card-surface flex items-center gap-3 p-3">
+                <Avatar text={initials(r.worker.full_name)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{r.worker.full_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {r.workedDays.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias × {brl(r.worker.daily_rate ?? 0)}
+                  </p>
+                </div>
+                <p className="text-sm font-semibold">{brl(r.amount)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-4 text-xs text-muted-foreground">
+          O valor fica apenas acumulado até o fechamento. Depois do fechamento vira pagamento pendente; só entra no caixa quando for marcado como pago.
+        </p>
       </AppShell>
     );
   }
@@ -42,13 +101,15 @@ function DiariasPage() {
   const preview = workers
     .filter((w) => w.status !== "desligado")
     .map((w) => {
-      const days = attendance.filter(
-        (a) =>
-          a.worker_id === w.id &&
-          a.status === "presente" &&
-          a.date >= period.start_date &&
-          a.date <= period.end_date,
-      ).length;
+      const days = attendance
+        .filter(
+          (a) =>
+            a.worker_id === w.id &&
+            a.status === "presente" &&
+            a.date >= period.start_date &&
+            a.date <= period.end_date,
+        )
+        .reduce((sum, a) => sum + Number(a.work_fraction ?? 1), 0);
       const rate = w.employment_type === "diarista" ? (w.daily_rate ?? 0) : (w.salary ?? 0) / 30;
       return { worker: w, days, amount: Math.round(days * rate * 100) / 100 };
     })
@@ -155,7 +216,7 @@ function DiariasPage() {
         </>
       ) : (
         <>
-          <SectionTitle title="Prévia do cálculo" hint="Dias presentes × valor da diária" />
+          <SectionTitle title="Prévia do cálculo" hint="Dia integral = 1 diária · meio período = 0,5 diária" />
           {preview.length === 0 ? (
             <EmptyState text="Nenhum dia trabalhado registrado neste período." />
           ) : (
@@ -166,7 +227,7 @@ function DiariasPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{r.worker.full_name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {r.days} dias ·{" "}
+                      {r.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias ·{" "}
                       {r.worker.employment_type === "diarista"
                         ? brl(r.worker.daily_rate ?? 0) + "/dia"
                         : "CLT proporcional"}
