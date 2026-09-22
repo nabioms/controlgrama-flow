@@ -48,7 +48,7 @@ function ServiceOrdersPage() {
 
   const draftTotal = services.reduce((sum, row) => {
     const type = activeTypes.find((x) => x.id === row.service_type_id);
-    return sum + (type ? Number(row.planned_quantity || 0) * Number(type.unit_price) : 0);
+    return sum + (type ? parseQuantity(row.planned_quantity) * Number(type.unit_price) : 0);
   }, 0);
 
   const filteredOrders = useMemo(
@@ -81,7 +81,7 @@ function ServiceOrdersPage() {
     setSaving(true);
     try {
       const valid = services
-        .map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity) }))
+        .map((s) => ({ service_type_id: s.service_type_id, planned_quantity: parseQuantity(s.planned_quantity) }))
         .filter((s) => s.service_type_id && s.planned_quantity > 0);
 
       if (!valid.length) throw new Error("Adicione pelo menos um serviço com quantidade maior que zero.");
@@ -92,7 +92,7 @@ function ServiceOrdersPage() {
         contract_id: contractId || null,
         team_id: teamId,
         planned_quantity: valid[0].planned_quantity,
-        services: valid.map((s, index) => ({ ...s, realized_quantity: order.status === "realizada" ? Number(editServices[index]?.planned_quantity ?? 0) : undefined })),
+        services: valid.map((s, index) => ({ ...s, realized_quantity: undefined })),
         notes: notes || null,
       });
 
@@ -150,7 +150,7 @@ function ServiceOrdersPage() {
     setError("");
     try {
       const valid = order.status === "realizada"
-        ? editServices.map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity), realized_quantity: Number(s.planned_quantity) }))
+        ? editServices.map((s) => ({ service_type_id: s.service_type_id, planned_quantity: parseQuantity(s.planned_quantity), realized_quantity: parseQuantity(s.planned_quantity) }))
         : editServices
             .map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity) }))
             .filter((s) => s.service_type_id && s.planned_quantity > 0);
@@ -196,7 +196,7 @@ function ServiceOrdersPage() {
         const order = serviceOrders.find((o) => o.id === finishing);
         const items = order?.items || [];
         if (!items.length) throw new Error("Esta O.S. não possui linhas de serviço carregadas. Atualize a página e tente novamente.");
-        const quantities = items.map((item) => ({ item_id: item.id, quantity: Number(realizedInputs[item.id] ?? item.planned_quantity) }));
+        const quantities = items.map((item) => ({ item_id: item.id, quantity: parseQuantity(realizedInputs[item.id] ?? item.planned_quantity) }));
         if (quantities.some((x) => !Number.isFinite(x.quantity) || x.quantity < 0)) throw new Error("Informe quantidades realizadas válidas.");
         await finalizeServiceOrder(finishing, status, quantities);
       }
@@ -248,7 +248,7 @@ function ServiceOrdersPage() {
               return (
                 <div key={index} className="grid gap-2 rounded-xl bg-muted/50 p-2 sm:grid-cols-[1fr_150px_130px_auto] sm:items-end">
                   <label className="text-xs font-semibold">Serviço<select className="input mt-1" value={row.service_type_id} onChange={(e) => setServices((rows) => rows.map((x, i) => i === index ? { ...x, service_type_id: e.target.value } : x))}><option value="">Selecione...</option>{activeTypes.map((t) => <option key={t.id} value={t.id}>{t.name} — {brl(Number(t.unit_price))}/{unitLabel[t.unit]}</option>)}</select></label>
-                  <label className="text-xs font-semibold">Quantidade<input className="input mt-1" type="number" min="0" step="0.01" value={row.planned_quantity} onChange={(e) => setServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value } : x))} placeholder={type ? unitLabel[type.unit] : "ex.: 10000"} /></label>
+                  <label className="text-xs font-semibold">Quantidade<input className={`${quantityInputClass} mt-1`} type="text" inputMode="decimal" enterKeyHint="done" value={row.planned_quantity} onChange={(e) => setServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value.replace(/[^0-9.,]/g, "") } : x))} placeholder={type ? `Quantidade em ${unitLabel[type.unit]}` : "ex.: 10000"} aria-label={`Quantidade em ${type ? unitLabel[type.unit] : "unidade"}`} /></label>
                   <div className="rounded-lg border bg-background px-3 py-2 text-xs"><span className="text-muted-foreground">Subtotal</span><div className="font-semibold">{brl(amount)}</div></div>
                   <Button variant="outline" disabled={services.length === 1} onClick={() => removeServiceRow(index)} aria-label="Remover serviço"><Trash2 className="size-4" /></Button>
                 </div>
@@ -264,7 +264,7 @@ function ServiceOrdersPage() {
 
         <label className="mt-3 block text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Frente, local ou observação da execução..." /></label>
         {error && <p className="mt-2 text-xs font-semibold text-destructive">{error}</p>}
-        <Button className="mt-3 w-full" disabled={saving || !teamId || !services.some((s) => s.service_type_id && Number(s.planned_quantity) > 0)} onClick={createOrder}><Plus className="size-4" /> Abrir O.S. com {services.filter((s) => s.service_type_id && Number(s.planned_quantity) > 0).length || 0} serviço(s)</Button>
+        <Button className="mt-3 w-full" disabled={saving || !teamId || !services.some((s) => s.service_type_id && parseQuantity(s.planned_quantity) > 0)} onClick={createOrder}><Plus className="size-4" /> Abrir O.S. com {services.filter((s) => s.service_type_id && Number(s.planned_quantity) > 0).length || 0} serviço(s)</Button>
       </Card>
 
       <Card className="mb-5">
@@ -368,7 +368,7 @@ function ServiceOrdersPage() {
                               <option value="">Selecione...</option>{activeTypes.map((t) => <option key={t.id} value={t.id}>{t.name} — {brl(Number(t.unit_price))}/{unitLabel[t.unit]}</option>)}
                             </select>
                           )}
-                          <input className="input" type="number" min="0" step="0.01" value={row.planned_quantity} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value } : x))} placeholder={type ? unitLabel[type.unit] : "Quantidade"} />
+                          <input className={quantityInputClass} type="text" inputMode="decimal" enterKeyHint="done" value={row.planned_quantity} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value.replace(/[^0-9.,]/g, "") } : x))} placeholder={type ? `Quantidade em ${unitLabel[type.unit]}` : "Quantidade"} aria-label={`Quantidade em ${type ? unitLabel[type.unit] : "unidade"}`} />
                           {!lockedServices && <Button variant="outline" disabled={editServices.length === 1} onClick={() => setEditServices((rows) => rows.filter((_, i) => i !== index))}><Trash2 className="size-4" /></Button>}
                         </div>;
                       })}
@@ -391,7 +391,7 @@ function ServiceOrdersPage() {
             {(() => {
               const order = serviceOrders.find((o) => o.id === finishing);
               const items = order?.items || [];
-              const total = items.reduce((sum, item) => sum + Number(realizedInputs[item.id] || 0) * Number(item.unit_price), 0);
+              const total = items.reduce((sum, item) => sum + parseQuantity(realizedInputs[item.id] || "") * Number(item.unit_price), 0);
               return (
                 <>
                   <div className="flex items-center justify-between gap-3">
@@ -401,7 +401,7 @@ function ServiceOrdersPage() {
                   <div className="mt-4 space-y-2">
                     {items.map((item) => {
                       const type = item.service_type || serviceTypes.find((t) => t.id === item.service_type_id);
-                      return <div key={item.id} className="grid grid-cols-[1fr_130px] items-end gap-2 rounded-xl bg-muted/50 p-3"><div><p className="text-sm font-semibold">{type?.name || "Serviço"}</p><p className="text-xs text-muted-foreground">Previsto: {Number(item.planned_quantity).toLocaleString("pt-BR")} {type ? unitLabel[type.unit] : ""} · {brl(Number(item.unit_price))}/{type ? unitLabel[type.unit] : ""}</p></div><label className="text-xs font-semibold">Realizado<input className="input mt-1" type="number" min="0" step="0.01" value={realizedInputs[item.id] ?? ""} onChange={(e) => setRealizedInputs((x) => ({ ...x, [item.id]: e.target.value }))} /></label></div>;
+                      return <div key={item.id} className="grid grid-cols-[1fr_130px] items-end gap-2 rounded-xl bg-muted/50 p-3"><div><p className="text-sm font-semibold">{type?.name || "Serviço"}</p><p className="text-xs text-muted-foreground">Previsto: {Number(item.planned_quantity).toLocaleString("pt-BR")} {type ? unitLabel[type.unit] : ""} · {brl(Number(item.unit_price))}/{type ? unitLabel[type.unit] : ""}</p></div><label className="text-xs font-semibold">Realizado<input className="input mt-1" type="text" inputMode="decimal" enterKeyHint="done" value={realizedInputs[item.id] ?? ""} onChange={(e) => setRealizedInputs((x) => ({ ...x, [item.id]: e.target.value.replace(/[^0-9.,]/g, "") }))} /></label></div>;
                     })}
                   </div>
                   <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/10 px-3 py-2"><span className="text-sm font-semibold">Valor realizado</span><span className="text-lg font-bold">{brl(total)}</span></div>
