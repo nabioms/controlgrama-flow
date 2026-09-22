@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { LogIn, Loader2, Sprout } from "lucide-react";
+import { LogIn, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
@@ -125,15 +125,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg">
-          <div className="mb-6 flex items-center gap-2 text-primary">
-            <Sprout className="size-7" />
-            <div>
-              <h1 className="font-display text-xl font-bold">ControlGrama</h1>
-              <p className="text-xs text-muted-foreground">Gestão da operação</p>
-            </div>
-          </div>
-
-          <h2 className="text-lg font-semibold">{signup ? "Criar acesso" : "Entrar"}</h2>
+          <div className="mb-7 flex justify-center">\n            <img src="/controlgrama-logo.svg" alt="ControlGrama" className="h-auto w-full max-w-[330px]" />\n          </div>\n\n          <h2 className="text-lg font-semibold">{signup ? "Criar acesso" : "Entrar"}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {signup
               ? "O primeiro usuário cadastrado recebe perfil Admin."
