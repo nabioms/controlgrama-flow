@@ -110,7 +110,7 @@ export function StoreProvider({children}:{children:ReactNode}){
    }).select("*, service_type:service_types(*), contract:contracts(*)").single();
    if(error)throw error;
    if(input.worker_ids.length){ const {error:teamError}=await supabase.from("service_order_workers").insert(input.worker_ids.map(worker_id=>({service_order_id:data.id,worker_id}))); if(teamError)throw teamError; }
-   setServiceOrders(x=>[{...(data as ServiceOrder),workers:[]},...x]);
+   setServiceOrders(x=>[data as ServiceOrder,...x]);
  },[serviceTypes]);
  const finalizeServiceOrder=useCallback(async(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>{
    const order=serviceOrders.find(o=>o.id===id); if(!order)throw new Error("O.S. não encontrada.");
