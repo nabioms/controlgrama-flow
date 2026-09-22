@@ -20,9 +20,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const finishConfirmation = async (incomingUrl?: string) => {
-      const hash = incomingUrl
-        ? new URL(incomingUrl).hash
-        : window.location.hash;
+      const hash = incomingUrl ? new URL(incomingUrl).hash : window.location.hash;
       const isConfirmationReturn =
         hash.includes("access_token=") ||
         hash.includes("type=signup") ||
@@ -123,9 +121,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg">
-          <div className="mb-7 flex justify-center">\n            <img src="/controlgrama-logo.svg" alt="ControlGrama" className="h-auto w-full max-w-[330px]" />\n          </div>\n\n          <h2 className="text-lg font-semibold">{signup ? "Criar acesso" : "Entrar"}</h2>
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
+        <div className="w-full max-w-md rounded-3xl border border-border/70 bg-card p-5 shadow-xl sm:p-7">
+          <div className="mb-5 flex justify-center">
+            <img
+              src="/controlgrama-logo.svg"
+              alt="ControlGrama"
+              className="h-auto w-full max-w-[280px]"
+            />
+          </div>
+
+          <h2 className="text-lg font-semibold">{signup ? "Criar acesso" : "Entrar"}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {signup
               ? "O primeiro usuário cadastrado recebe perfil Admin."
