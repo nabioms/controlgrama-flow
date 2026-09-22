@@ -4,7 +4,7 @@ import { Check, CircleSlash, FileHeart, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, SectionTitle, Avatar } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { contracts } from "@/lib/mock-data";
+
 import { formatDate, initials, toISO } from "@/lib/format";
 import type { AttendanceStatus } from "@/lib/types";
 
@@ -31,7 +31,7 @@ const toneFor = (s?: AttendanceStatus) =>
   s === "presente" ? "success" : s === "falta" ? "danger" : s === "atestado" ? "info" : s === "falta_justificada" ? "warning" : "neutral";
 
 function PontoPage() {
-  const { workers, attendance, setAttendanceStatus } = useStore();
+  const { workers, attendance, setAttendanceStatus, contracts } = useStore();
   const [date, setDate] = useState(toISO(new Date()));
   const [contractId, setContractId] = useState<string>("ct-1");
   const [notes, setNotes] = useState("Frente Zona Norte");
