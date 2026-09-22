@@ -149,9 +149,12 @@ function ServiceOrdersPage() {
     setEditSaving(true);
     setError("");
     try {
-      const valid = editServices
-        .map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity) }))
-        .filter((s) => s.service_type_id && s.planned_quantity > 0);
+      const valid = order.status === "realizada"
+        ? editServices.map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity), realized_quantity: Number(s.planned_quantity) }))
+        : editServices
+            .map((s) => ({ service_type_id: s.service_type_id, planned_quantity: Number(s.planned_quantity) }))
+            .filter((s) => s.service_type_id && s.planned_quantity > 0);
+      if (valid.some((s) => !s.service_type_id || !Number.isFinite(s.planned_quantity) || s.planned_quantity < 0)) throw new Error("Informe quantidades válidas.");
       if (order.status !== "realizada" && !valid.length) throw new Error("Adicione pelo menos um serviço com quantidade maior que zero.");
       await updateServiceOrder(editing, {
         service_date: editDate,
