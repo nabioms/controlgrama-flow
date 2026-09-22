@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { BarChart3, CalendarCheck2, Home, Users, Wallet, FileText, Sprout } from "lucide-react";
+import { BarChart3, CalendarCheck2, Home, Users, Wallet, FileText, Sprout, ClipboardList } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 
@@ -8,6 +8,7 @@ const navItems = [
   { to: "/", label: "Início", icon: Home },
   { to: "/ponto", label: "Ponto", icon: CalendarCheck2 },
   { to: "/diarias", label: "Diárias", icon: Wallet },
+  { to: "/os", label: "O.S.", icon: ClipboardList },
   { to: "/financeiro", label: "Financeiro", icon: BarChart3 },
   { to: "/equipe", label: "Equipe", icon: Users },
 ] as const;
