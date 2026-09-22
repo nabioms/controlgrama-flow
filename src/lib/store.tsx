@@ -14,11 +14,7 @@ interface Store {
   markReceived:(id:string)=>Promise<void>; addPayable:(p:Payable)=>Promise<void>; markPayablePaid:(id:string)=>Promise<void>;
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
-  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null})=>Promise<void>;
-  finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>Promise<void>;
-  addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
-  updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
-  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null})=>Promise<void>;
+  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;planned_quantity:number;notes:string|null;worker_ids:string[]})=>Promise<void>;
   finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantity?:number)=>Promise<void>;
 }
 const StoreContext=createContext<Store|null>(null);
@@ -33,7 +29,6 @@ export function StoreProvider({children}:{children:ReactNode}){
  const [expenseCategories,setExpenseCategories]=useState<ExpenseCategory[]>([]),[invoices,setInvoices]=useState<Invoice[]>([]),[workerDocuments,setWorkerDocuments]=useState<WorkerDocument[]>([]),[workerEvents,setWorkerEvents]=useState<WorkerEvent[]>([]);
  const [attendance,setAttendance]=useState<Attendance[]>([]),[paymentPeriods,setPaymentPeriods]=useState<PaymentPeriod[]>([]),[payments,setPayments]=useState<Payment[]>([]);
  const [receivables,setReceivables]=useState<Receivable[]>([]),[payables,setPayables]=useState<Payable[]>([]),[cashFlowHistory,setCashFlowHistory]=useState<CashFlowMonth[]>([]);
- const [serviceTypes,setServiceTypes]=useState<ServiceType[]>([]),[serviceOrders,setServiceOrders]=useState<ServiceOrder[]>([]);
  const [serviceTypes,setServiceTypes]=useState<ServiceType[]>([]),[serviceOrders,setServiceOrders]=useState<ServiceOrder[]>([]);
  const [openingBalance,setOpeningBalance]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null);
 
