@@ -159,8 +159,11 @@ function DiariasPage() {
   const detail = useMemo(() => {
     if (!selectedWorker || !month) return null;
 
-    const rows = getMonthRows(selectedWorker, month);
-    const rowMap = new Map(rows.map((row) => [row.date, row]));
+    const allRows = (attendanceByWorker.get(selectedWorker.id) ?? []).filter(
+      (row) => row.date.startsWith(month),
+    );
+    const rows = allRows.filter(isWorked);
+    const rowMap = new Map(allRows.map((row) => [row.date, row]));
     const cycles = paymentCycles(month);
 
     const sumRows = (items: Attendance[]) => {
@@ -315,6 +318,7 @@ function DiariasPage() {
               const row = detail.rowMap.get(iso);
               const fraction = Number(row?.work_fraction ?? 1);
               const worked = isWorked(row);
+              const absent = row?.status === "falta";
               const amount = worked ? (selectedWorker.daily_rate ?? 0) * fraction : 0;
 
               return (
@@ -325,9 +329,11 @@ function DiariasPage() {
                   className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
                       ? "border-primary bg-primary-soft"
-                      : "border-border bg-card"
+                      : absent
+                        ? "border-destructive bg-destructive/10"
+                        : "border-border bg-card"
                   }`}
-                  title={worked ? "Editar diária" : "Lançar diária"}
+                  title={worked ? "Editar diária" : absent ? "Falta registrada" : "Lançar diária"}
                 >
                   <p className="text-[10px] font-semibold">{day}</p>
                   {worked ? (
@@ -339,6 +345,8 @@ function DiariasPage() {
                         {brl(amount)}
                       </p>
                     </>
+                  ) : absent ? (
+                    <p className="mt-2 truncate text-[9px] font-bold text-destructive">Falta</p>
                   ) : (
                     <p className="mt-2 text-[9px] text-muted-foreground">—</p>
                   )}
