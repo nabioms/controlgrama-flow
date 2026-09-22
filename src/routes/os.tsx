@@ -11,7 +11,7 @@ export const Route = createFileRoute("/os")({ component: ServiceOrdersPage });
 
 const unitLabel: Record<ServiceUnit, string> = { m2: "m²", km: "km", hora: "hora", unidade: "unidade" };
 
-type DraftService = { service_type_id: string; planned_quantity: string };
+type DraftService = { service_type_id: string; planned_quantity: string; item_id?: string };
 
 function ServiceOrdersPage() {
   const { serviceTypes, serviceOrders, contracts, teams, receivables, addServiceType, updateServiceType, addServiceOrder, updateServiceOrder, deleteServiceOrder, finalizeServiceOrder } = useStore();
@@ -92,7 +92,7 @@ function ServiceOrdersPage() {
         contract_id: contractId || null,
         team_id: teamId,
         planned_quantity: valid[0].planned_quantity,
-        services: valid,
+        services: valid.map((s, index) => ({ ...s, realized_quantity: order.status === "realizada" ? Number(editServices[index]?.planned_quantity ?? 0) : undefined })),
         notes: notes || null,
       });
 
@@ -137,7 +137,7 @@ function ServiceOrdersPage() {
     setEditTeamId(order.team_id || "");
     setEditNotes(order.notes || "");
     setEditServices(items.length
-      ? items.map((item) => ({ service_type_id: item.service_type_id, planned_quantity: String(item.planned_quantity) }))
+      ? items.map((item) => ({ service_type_id: item.service_type_id, planned_quantity: String(order.status === "realizada" ? (item.realized_quantity ?? item.planned_quantity) : item.planned_quantity), item_id: item.id }))
       : [{ service_type_id: order.service_type_id, planned_quantity: String(order.planned_quantity) }]);
     setError("");
   }
@@ -349,27 +349,28 @@ function ServiceOrdersPage() {
                     </select></label>
                   </div>
 
-                  {lockedServices ? (
-                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
-                      <strong>O.S. realizada:</strong> os serviços e o valor realizado ficam protegidos nesta edição. Você pode alterar data, contrato, equipe e observação sem mudar o valor já realizado.
+                  <div className="mt-4 rounded-xl border p-3">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div><p className="text-sm font-semibold">{lockedServices ? "Quantidade realizada" : "Serviços"}</p><p className="text-xs text-muted-foreground">{lockedServices ? "Altere o realizado e o Financeiro será atualizado automaticamente." : "Edite os serviços e quantidades previstas."}</p></div>
+                      {!lockedServices && <Button variant="outline" onClick={() => setEditServices((rows) => [...rows, { service_type_id: "", planned_quantity: "" }])}><Plus className="size-4" /> Serviço</Button>}
                     </div>
-                  ) : (
-                    <div className="mt-4 rounded-xl border p-3">
-                      <div className="mb-3 flex items-center justify-between"><p className="text-sm font-semibold">Serviços</p><Button variant="outline" onClick={() => setEditServices((rows) => [...rows, { service_type_id: "", planned_quantity: "" }])}><Plus className="size-4" /> Serviço</Button></div>
-                      <div className="space-y-2">
-                        {editServices.map((row, index) => {
-                          const type = activeTypes.find((x) => x.id === row.service_type_id);
-                          return <div key={index} className="grid gap-2 sm:grid-cols-[1fr_150px_auto]">
+                    <div className="space-y-2">
+                      {editServices.map((row, index) => {
+                        const type = activeTypes.find((x) => x.id === row.service_type_id);
+                        return <div key={row.item_id || index} className="grid gap-2 sm:grid-cols-[1fr_150px_auto]">
+                          {lockedServices ? (
+                            <div className="rounded-lg border bg-muted/40 px-3 py-2 text-xs"><p className="font-semibold">{type?.name || "Serviço"}</p><p className="text-muted-foreground">{type ? brl(Number(type.unit_price)) + "/" + unitLabel[type.unit] : ""}</p></div>
+                          ) : (
                             <select className="input" value={row.service_type_id} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, service_type_id: e.target.value } : x))}>
                               <option value="">Selecione...</option>{activeTypes.map((t) => <option key={t.id} value={t.id}>{t.name} — {brl(Number(t.unit_price))}/{unitLabel[t.unit]}</option>)}
                             </select>
-                            <input className="input" type="number" min="0" step="0.01" value={row.planned_quantity} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value } : x))} placeholder={type ? unitLabel[type.unit] : "Quantidade"} />
-                            <Button variant="outline" disabled={editServices.length === 1} onClick={() => setEditServices((rows) => rows.filter((_, i) => i !== index))}><Trash2 className="size-4" /></Button>
-                          </div>;
-                        })}
-                      </div>
+                          )}
+                          <input className="input" type="number" min="0" step="0.01" value={row.planned_quantity} onChange={(e) => setEditServices((rows) => rows.map((x, i) => i === index ? { ...x, planned_quantity: e.target.value } : x))} placeholder={type ? unitLabel[type.unit] : "Quantidade"} />
+                          {!lockedServices && <Button variant="outline" disabled={editServices.length === 1} onClick={() => setEditServices((rows) => rows.filter((_, i) => i !== index))}><Trash2 className="size-4" /></Button>}
+                        </div>;
+                      })}
                     </div>
-                  )}
+                  </div>
 
                   <label className="mt-3 block text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} /></label>
                   {error && <p className="mt-2 text-xs font-semibold text-destructive">{error}</p>}
