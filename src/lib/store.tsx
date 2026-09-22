@@ -16,7 +16,7 @@ interface Store {
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
   addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
-  updateServiceOrder:(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
+  updateServiceOrder:(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>Promise<void>;
   deleteServiceOrder:(id:string)=>Promise<void>;
   finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>Promise<void>;
 }
@@ -147,7 +147,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    });
    if(error)throw error;
    await refresh();
- },[refresh]);
+ },[refresh,serviceOrders]);
  const deleteServiceOrder=useCallback(async(id:string)=>{
    const {error}=await supabase.rpc("delete_service_order",{p_service_order_id:id});
    if(error)throw error;
