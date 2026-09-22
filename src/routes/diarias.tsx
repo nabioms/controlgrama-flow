@@ -43,6 +43,13 @@ const monthTitle = (month: string) => {
 
 const nextMonth = (month: string) => shiftMonth(month, 1);
 
+const dateShift = (iso: string, amount: number) => {
+  const [year, month, day] = iso.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  d.setDate(d.getDate() + amount);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 const fifthBusinessDay = (month: string) => {
   const [year, monthNumber] = month.split("-").map(Number);
   let count = 0;
@@ -59,28 +66,37 @@ const fifthBusinessDay = (month: string) => {
 };
 
 const paymentCycles = (month: string) => {
-  const [year, monthNumber] = month.split("-").map(Number);
-  const next = new Date(year, monthNumber, 1);
-  return {
-    firstHalf: {
-      start: monthToDate(month, 1),
-      end: monthToDate(month, 15),
-      label: "Dia 20",
-      description: "1ª quinzena",
-      payDate: monthToDate(month, 20),
-    },
-    secondHalf: {
-      start: monthToDate(month, 16),
-      end: monthToDate(month, new Date(year, monthNumber, 0).getDate()),
+  const previous = shiftMonth(month, -1);
+  const next = shiftMonth(month, 1);
+  const fifthCurrent = fifthBusinessDay(month);
+  const fifthNext = fifthBusinessDay(next);
+
+  return [
+    {
+      key: "fifth-current",
+      cycle: "quinto_dia_util" as const,
       label: "5º dia útil",
-      description: "2ª quinzena",
-      payDate: fifthBusinessDay(
-        next.getFullYear() + "-" + pad(next.getMonth() + 1),
-      ),
-      nextMonthYear: next.getFullYear(),
-      nextMonthNumber: next.getMonth() + 1,
+      payDate: fifthCurrent,
+      start: monthToDate(previous, 21),
+      end: dateShift(fifthCurrent, -1),
     },
-  };
+    {
+      key: "twentieth-current",
+      cycle: "dia_20" as const,
+      label: "Dia 20",
+      payDate: monthToDate(month, 20),
+      start: fifthCurrent,
+      end: monthToDate(month, 19),
+    },
+    {
+      key: "fifth-next",
+      cycle: "quinto_dia_util" as const,
+      label: "5º dia útil",
+      payDate: fifthNext,
+      start: monthToDate(month, 20),
+      end: dateShift(fifthNext, -1),
+    },
+  ];
 };
 
 const isWorked = (row?: Attendance) => row?.status === "presente";
@@ -144,13 +160,6 @@ function DiariasPage() {
     const rowMap = new Map(rows.map((row) => [row.date, row]));
     const cycles = paymentCycles(month);
 
-    const firstRows = rows.filter(
-      (row) => row.date >= cycles.firstHalf.start && row.date <= cycles.firstHalf.end,
-    );
-    const secondRows = rows.filter(
-      (row) => row.date >= cycles.secondHalf.start && row.date <= cycles.secondHalf.end,
-    );
-
     const sumRows = (items: Attendance[]) => {
       const days = items.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
       return {
@@ -159,8 +168,16 @@ function DiariasPage() {
       };
     };
 
-    const first = sumRows(firstRows);
-    const second = sumRows(secondRows);
+    const cycleData = cycles
+      .map((cycle) => ({
+        ...cycle,
+        rows: rows.filter((row) => row.date >= cycle.start && row.date <= cycle.end),
+      }))
+      .map((cycle) => ({
+        ...cycle,
+        ...sumRows(cycle.rows),
+      }));
+
     const daysInMonth = new Date(
       Number(month.slice(0, 4)),
       Number(month.slice(5, 7)),
@@ -173,13 +190,11 @@ function DiariasPage() {
     return {
       rowMap,
       rows,
-      first,
-      second,
-      totalDays: first.days + second.days,
-      totalAmount: first.amount + second.amount,
+      cycles: cycleData,
+      totalDays: cycleData.reduce((sum, cycle) => sum + cycle.days, 0),
+      totalAmount: cycleData.reduce((sum, cycle) => sum + cycle.amount, 0),
       daysInMonth,
       firstWeekday,
-      cycles,
     };
   }, [selectedWorker, month, attendanceByWorker]);
 
@@ -192,9 +207,6 @@ function DiariasPage() {
   }
 
   if (selectedWorker && detail) {
-    const nextPay = detail.cycles.secondHalf.nextMonthNumber;
-    const nextPayMonth = `${detail.cycles.secondHalf.nextMonthYear}-${pad(nextPay)}`;
-
     return (
       <AppShell title="Diárias" subtitle={selectedWorker.full_name}>
         <button
@@ -254,28 +266,25 @@ function DiariasPage() {
           </Card>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2">
-          <Card className="p-3">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-              Dia 20 · 1ª quinzena
-            </p>
-            <p className="mt-1 font-display text-xl font-semibold">{brl(detail.first.amount)}</p>
-            <p className="text-xs text-muted-foreground">
-              {detail.first.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias · 01–15
-            </p>
-          </Card>
-          <Card className="p-3">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-              5º dia útil · 2ª quinzena
-            </p>
-            <p className="mt-1 font-display text-xl font-semibold">{brl(detail.second.amount)}</p>
-            <p className="text-xs text-muted-foreground">
-              {detail.second.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias · 16–{detail.daysInMonth}
-            </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Pagamento em {formatDate(detail.cycles.secondHalf.payDate!)} · 5º dia útil de {monthTitle(nextPayMonth)}
-            </p>
-          </Card>
+        <div className="mb-4 space-y-2">
+          {detail.cycles.map((cycle) => (
+            <Card key={cycle.key} className="p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                    {cycle.label} · {formatDate(cycle.payDate)}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados neste mês
+                  </p>
+                </div>
+                <p className="font-display text-xl font-semibold text-primary-deep">{brl(cycle.amount)}</p>
+              </div>
+            </Card>
+          ))}
         </div>
 
         <Card className="mb-4 p-3">
@@ -407,8 +416,9 @@ function DiariasPage() {
       <Card className="mt-4 p-3">
         <p className="text-xs font-semibold">Como o pagamento é calculado</p>
         <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
-          <p>• Dias 01–15 → pagamento no dia 20.</p>
-          <p>• Dias 16–fim do mês → pagamento no 5º dia útil do mês seguinte (a data é calculada automaticamente).</p>
+          <p>• O 5º dia útil paga do dia 21 do mês anterior até o dia anterior ao pagamento.</p>
+          <p>• O dia 20 paga do último 5º dia útil até o dia 19.</p>
+          <p>• Os períodos são contínuos: cada dia trabalhado entra em um único pagamento.</p>
           <p>• Dia integral = 1 diária · meio período = 0,5 diária.</p>
         </div>
       </Card>
