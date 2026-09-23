@@ -176,7 +176,7 @@ function WorkerDetail() {
                   size="sm"
                   variant="danger"
                   onClick={async () => {
-                    if (!window.confirm("Excluir definitivamente este cadastro? Essa ação não pode ser desfeita.")) return;
+                    if (!window.confirm("ATENÇÃO: este cadastro será excluído definitivamente do ControlGrama.\n\nA exclusão é irreversível e só deve ser usada para cadastros criados por engano ou que não possuem histórico de ponto, pagamentos, documentos, eventos ou O.S.\n\nDepois de excluir, não será possível recuperar o cadastro.\n\nDeseja realmente excluir?")) return;
                     try {
                       await deleteWorker(worker.id);
                       window.location.href = "/equipe";
