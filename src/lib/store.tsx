@@ -11,7 +11,7 @@ interface Store {
   refresh:()=>Promise<void>; addWorker:(w:Worker,teamId?:string|null)=>Promise<void>; updateWorker:(id:string,patch:Partial<Worker>)=>Promise<void>;
   setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction?:number)=>Promise<void>;
   deleteAttendance:(id:string)=>Promise<void>;
-  closePeriod:(id:string)=>Promise<void>; markPaymentPaid:(id:string,m:PaymentMethod)=>Promise<void>;
+  closePeriod:(id:string)=>Promise<void>; closePaymentCycle:(input:{cycle:PaymentPeriod["cycle"];label:string;start_date:string;end_date:string;pay_date:string})=>Promise<void>; markPaymentPaid:(id:string,m:PaymentMethod)=>Promise<void>;
   markReceived:(id:string)=>Promise<void>; addPayable:(p:Payable)=>Promise<void>; markPayablePaid:(id:string)=>Promise<void>;
   addTeam:(name:string,foremanWorkerId:string|null)=>Promise<void>; updateTeam:(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"active">>)=>Promise<void>; setTeamMembers:(teamId:string,workerIds:string[])=>Promise<void>;
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
@@ -147,7 +147,54 @@ export function StoreProvider({children}:{children:ReactNode}){
   if(error)throw error;
   await refresh();
 },[paymentPeriods,workers,attendance,refresh]);
- const markPaymentPaid=useCallback(async(id:string,m:PaymentMethod)=>{const {error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
+ const markPaymentPaid=useCallback(async(id:string,m:PaymentMethod)=>{
+  const paidAt=new Date().toISOString().slice(0,10);
+  const {data:updated,error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:paidAt}).eq("id",id).select("period_id").single();
+  if(error)throw error;
+  const {data:remaining,error:remainingError}=await supabase.from("payments").select("id").eq("period_id",updated.period_id).neq("status","pago");
+  if(remainingError)throw remainingError;
+  if((remaining||[]).length===0){
+    const {error:periodError}=await supabase.from("payment_periods").update({status:"pago"}).eq("id",updated.period_id);
+    if(periodError)throw periodError;
+  }
+  await refresh();
+},[refresh]);
+ const closePaymentCycle=useCallback(async(input:{cycle:PaymentPeriod["cycle"];label:string;start_date:string;end_date:string;pay_date:string})=>{
+  let {data:period,error:periodError}=await supabase.from("payment_periods")
+    .select("*")
+    .eq("cycle",input.cycle)
+    .eq("start_date",input.start_date)
+    .eq("end_date",input.end_date)
+    .eq("pay_date",input.pay_date)
+    .maybeSingle();
+  if(periodError)throw periodError;
+
+  if(!period){
+    const {data:created,error}=await supabase.from("payment_periods").insert({
+      label:input.label,cycle:input.cycle,start_date:input.start_date,end_date:input.end_date,pay_date:input.pay_date,status:"aberto"
+    }).select("*").single();
+    if(error)throw error;
+    period=created;
+  }
+
+  for(const w of workers.filter(x=>x.status!=="desligado" && x.employment_type==="diarista")){
+    const workedDays=attendance
+      .filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente")
+      .reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
+    if(!workedDays)continue;
+    const gross=workedDays*(w.daily_rate||0);
+    const {error}=await supabase.from("payments").upsert({
+      period_id:period.id,worker_id:w.id,worked_days:Math.round(workedDays*100)/100,
+      daily_rate:w.daily_rate||0,gross_amount:Math.round(gross*100)/100,status:"pendente"
+    },{onConflict:"period_id,worker_id"});
+    if(error)throw error;
+  }
+
+  const {error:closeError}=await supabase.from("payment_periods").update({status:"fechado"}).eq("id",period.id);
+  if(closeError)throw closeError;
+  await refresh();
+},[workers,attendance,refresh]);
+
  const markReceived=useCallback(async(id:string)=>{const {error}=await supabase.from("receivables").update({status:"recebido",received_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const addPayable=useCallback(async(p:Payable)=>{const {id,paid_at,...row}=p;const {data,error}=await supabase.from("payables").insert({...row,paid_at:null}).select("*").single();if(error)throw error;setPayables(x=>[payable(data),...x])},[]);
  const markPayablePaid=useCallback(async(id:string)=>{const {error}=await supabase.from("payables").update({status:"pago",paid_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
@@ -227,7 +274,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — pagamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — pagamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
  const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,setAttendanceStatus,deleteAttendance,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,setAttendanceStatus,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,setAttendanceStatus,closePeriod,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}
