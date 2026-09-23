@@ -6,7 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
 import { brl, formatDate, initials } from "@/lib/format";
-import type { Attendance, Worker } from "@/lib/types";
+import type { Attendance, PaymentMethod, Worker } from "@/lib/types";
 
 export const Route = createFileRoute("/diarias")({
   head: () => ({
@@ -103,11 +103,11 @@ const paymentCycles = (month: string) => {
 const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { workers, attendance, payments, setAttendanceStatus, deleteAttendance } = useStore();
+  const { workers, attendance, payments, paymentPeriods, setAttendanceStatus, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);\n  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");\n  const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);\n  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -273,25 +273,126 @@ function DiariasPage() {
         </div>
 
         <div className="mb-4 space-y-2">
-          {detail.cycles.map((cycle) => (
-            <Card key={cycle.key} className="p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-                    {cycle.label} · {formatDate(cycle.payDate)}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold">
-                    Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados neste mês
-                  </p>
+          {detail.cycles.map((cycle) => {
+            const period = paymentPeriods.find(
+              (p) =>
+                p.cycle === cycle.cycle &&
+                p.start_date === cycle.start &&
+                p.end_date === cycle.end &&
+                p.pay_date === cycle.payDate,
+            );
+            const workerPayment = period
+              ? payments.find((p) => p.period_id === period.id && p.worker_id === selectedWorker.id)
+              : null;
+            const cyclePaid = workerPayment?.status === "pago";
+            const cyclePending = workerPayment?.status === "pendente";
+
+            return (
+              <Card key={cycle.key} className="p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                      {cycle.label} · {formatDate(cycle.payDate)}
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">
+                      Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados neste período
+                    </p>
+                  </div>
+                  <p className="shrink-0 font-display text-xl font-semibold text-primary-deep">{brl(cycle.amount)}</p>
                 </div>
-                <p className="font-display text-xl font-semibold text-primary-deep">{brl(cycle.amount)}</p>
-              </div>
-            </Card>
-          ))}
+
+                <div className="mt-3 border-t border-border pt-3">
+                  {!period ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-amber-700">Pagamento ainda não fechado</p>
+                        <p className="text-[10px] text-muted-foreground">Gera o registro deste período para controlar a baixa.</p>
+                      </div>
+                      <Button
+                        variant="soft"
+                        className="shrink-0"
+                        disabled={cycle.days <= 0}
+                        onClick={async () => {
+                          setPaymentError(null);
+                          try {
+                            await closePaymentCycle({
+                              cycle: cycle.cycle,
+                              label: cycle.label,
+                              start_date: cycle.start,
+                              end_date: cycle.end,
+                              pay_date: cycle.payDate,
+                            });
+                          } catch (error) {
+                            setPaymentError(error instanceof Error ? error.message : "Não foi possível fechar o pagamento.");
+                          }
+                        }}
+                      >
+                        Fechar pagamento
+                      </Button>
+                    </div>
+                  ) : cyclePaid ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-primary">✓ Pago</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {workerPayment?.paid_at ? "Pago em " + formatDate(workerPayment.paid_at) : "Pagamento registrado"}
+                          {workerPayment?.method ? " · " + (workerPayment.method === "pix" ? "PIX" : workerPayment.method === "dinheiro" ? "Dinheiro" : "Transferência") : ""}
+                        </p>
+                      </div>
+                      <Badge tone="success">Pago</Badge>
+                    </div>
+                  ) : cyclePending ? (
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-semibold text-amber-700">Pagamento pendente</p>
+                          <p className="text-[10px] text-muted-foreground">Marque como pago somente após realizar o pagamento.</p>
+                        </div>
+                        <Badge tone="warning">Pendente</Badge>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-1">
+                        {(["pix", "dinheiro", "transferencia"] as PaymentMethod[]).map((method) => (
+                          <button
+                            key={method}
+                            type="button"
+                            onClick={() => setPaymentMethod(method)}
+                            className={`rounded-lg border px-2 py-1.5 text-[10px] font-semibold ${paymentMethod === method ? "border-primary bg-primary-soft text-primary-deep" : "border-border bg-card text-muted-foreground"}`}
+                          >
+                            {method === "pix" ? "PIX" : method === "dinheiro" ? "Dinheiro" : "Transferência"}
+                          </button>
+                        ))}
+                      </div>
+                      <Button
+                        variant="primary"
+                        className="mt-2 w-full"
+                        disabled={payingPaymentId === workerPayment.id}
+                        onClick={async () => {
+                          setPaymentError(null);
+                          setPayingPaymentId(workerPayment.id);
+                          try {
+                            await markPaymentPaid(workerPayment.id, paymentMethod);
+                          } catch (error) {
+                            setPaymentError(error instanceof Error ? error.message : "Não foi possível registrar o pagamento.");
+                          } finally {
+                            setPayingPaymentId(null);
+                          }
+                        }}
+                      >
+                        {payingPaymentId === workerPayment.id ? "Registrando..." : "Dar baixa — pagamento realizado"}
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">Sem lançamento de pagamento para este período.</p>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
+        {paymentError ? <p className="mb-4 text-xs font-medium text-destructive">{paymentError}</p> : null}
 
         <Card className="mb-4 p-3">
           <div className="mb-3 flex items-center gap-2">
@@ -359,6 +460,39 @@ function DiariasPage() {
         <p className="text-xs text-muted-foreground">
           Dia integral = 100% da diária. Meio período = 50%. Falta, falta justificada e atestado = R$ 0.
         </p>
+
+        <Card className="mt-4 p-3">
+          <p className="text-sm font-semibold">Histórico de pagamentos</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Pagamentos deste diarista já baixados no sistema.</p>
+          <div className="mt-3 space-y-2">
+            {payments
+              .filter((p) => p.worker_id === selectedWorker.id && p.status === "pago")
+              .sort((a, b) => String(b.paid_at || "").localeCompare(String(a.paid_at || "")))
+              .map((p) => {
+                const period = paymentPeriods.find((item) => item.id === p.period_id);
+                return (
+                  <div key={p.id} className="flex items-center justify-between gap-3 rounded-lg border border-border p-2.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold">{period?.label || "Pagamento de diária"}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {period ? formatDate(period.start_date) + " a " + formatDate(period.end_date) : "Período não informado"}
+                        {p.paid_at ? " · pago em " + formatDate(p.paid_at) : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-bold text-primary-deep">{brl(p.gross_amount)}</p>
+                      <p className="text-[9px] text-muted-foreground">
+                        {p.method === "pix" ? "PIX" : p.method === "dinheiro" ? "Dinheiro" : "Transferência"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            {!payments.some((p) => p.worker_id === selectedWorker.id && p.status === "pago") ? (
+              <p className="py-2 text-[11px] text-muted-foreground">Nenhum pagamento baixado ainda.</p>
+            ) : null}
+          </div>
+        </Card>
 
         {editingDate ? (
           <Card className="mt-4 p-3">
@@ -521,9 +655,12 @@ function DiariasPage() {
 
       {payments.length > 0 ? (
         <Card className="mt-4 p-3">
-          <p className="text-xs font-semibold">Pagamentos já fechados</p>
+          <p className="text-xs font-semibold">Controle de pagamentos</p>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            {payments.filter((payment) => payment.status === "pendente").length} pagamento(s) pendente(s) de baixa.
+            {payments.filter((payment) => payment.status === "pago").length} pagamento(s) já baixado(s) · {payments.filter((payment) => payment.status === "pendente").length} pendente(s).
+          </p>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Cada baixa fica registrada com data e forma de pagamento para consulta posterior.
           </p>
         </Card>
       ) : null}
