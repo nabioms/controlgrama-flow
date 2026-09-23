@@ -31,7 +31,7 @@ function EquipePage() {
   const [openTeamId, setOpenTeamId] = useState<string | null>(null);
   const [form, setForm] = useState({
     full_name: "", cpf: "", phone: "", job_role: "roçador",
-    employment_type: "diarista" as EmploymentType, daily_rate: "110", salary: "", teamId: "",
+    employment_type: "diarista" as EmploymentType, daily_rate: "110", salary: "", shirt_size: "", shoe_size: "", teamId: "",
   });
   const [teamForm, setTeamForm] = useState({ name: "", foremanWorkerId: "" });
   const [saving, setSaving] = useState(false);
@@ -58,7 +58,7 @@ function EquipePage() {
     try {
       const w: Worker = {
         id: `w-${Date.now()}`, full_name: form.full_name.trim(), cpf: form.cpf, rg: "", phone: form.phone,
-        address: "", photo_url: null, job_role: form.job_role as Worker["job_role"],
+        address: "", shirt_size: form.shirt_size.trim() || null, shoe_size: form.shoe_size.trim() || null, photo_url: null, job_role: form.job_role as Worker["job_role"],
         employment_type: form.employment_type, status: "ativo",
         daily_rate: form.employment_type === "diarista" ? Number(form.daily_rate || 0) : null,
         salary: form.employment_type === "contratado" ? Number(form.salary || 0) : null,
@@ -69,7 +69,7 @@ function EquipePage() {
       };
       await addWorker(w, form.teamId || null);
       setOpenWorker(false);
-      setForm({ ...form, full_name: "", cpf: "", phone: "", teamId: "" });
+      setForm({ ...form, full_name: "", cpf: "", phone: "", shirt_size: "", shoe_size: "", teamId: "" });
     } catch (e: any) {
       setError(e?.message || "Não foi possível cadastrar o funcionário.");
     } finally { setSaving(false); }
@@ -234,6 +234,8 @@ function EquipePage() {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="CPF"><Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></Field>
                 <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="(67) 99999-9999" /></Field>
+                <Field label="Tamanho da camisa"><Input value={form.shirt_size} onChange={(e) => setForm({ ...form, shirt_size: e.target.value.toUpperCase() })} placeholder="Ex.: M, G, GG" /></Field>
+                <Field label="Tamanho do calçado"><Input value={form.shoe_size} onChange={(e) => setForm({ ...form, shoe_size: e.target.value })} placeholder="Ex.: 40" /></Field>
                 <Field label="Função">
                   <Select value={form.job_role} onChange={(e) => setForm({ ...form, job_role: e.target.value })}>
                     {["roçador", "motorista", "encarregado", "auxiliar", "operador de máquina"].map((r) => <option key={r} value={r}>{r}</option>)}
