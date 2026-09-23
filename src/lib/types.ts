@@ -22,6 +22,8 @@ export interface Worker {
   rg: string;
   phone: string;
   address: string;
+  shirt_size: string | null;
+  shoe_size: string | null;
   photo_url: string | null;
   job_role: WorkerRoleName;
   employment_type: EmploymentType;
@@ -54,6 +56,18 @@ export type DocumentKind = "cnh" | "aso" | "comprovante_endereco" | "contrato_as
 export interface WorkerDocument { id: UUID; worker_id: UUID; kind: DocumentKind; file_name: string; file_url: string | null; issued_at: ISODate | null; expires_at: ISODate | null; }
 export type WorkerEventKind = "advertencia" | "promocao" | "mudanca_funcao" | "afastamento" | "outro";
 export interface WorkerEvent { id: UUID; worker_id: UUID; kind: WorkerEventKind; date: ISODate; description: string; }
+export type EpiKind = "mascara_facial" | "luva" | "oculos" | "avental" | "caneleira" | "abafador" | "uniforme" | "calcado";
+export interface WorkerEpi {
+  id: UUID;
+  worker_id: UUID;
+  epi_kind: EpiKind;
+  delivered: boolean;
+  delivered_at: ISODate | null;
+  returned: boolean;
+  returned_at: ISODate | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export type AttendanceStatus = "presente" | "falta" | "falta_justificada" | "atestado";
 export interface Attendance { id: UUID; worker_id: UUID; date: ISODate; status: AttendanceStatus; work_fraction?: number; notes: string | null; contract_id: UUID | null; }
