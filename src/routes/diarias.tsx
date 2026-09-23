@@ -5,7 +5,7 @@ import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
-import { brl, formatDate, initials } from "@/lib/format";
+import { brl, businessDay, formatDate, initials, toISO } from "@/lib/format";
 import type { Attendance, PaymentMethod, Worker } from "@/lib/types";
 
 export const Route = createFileRoute("/diarias")({
@@ -53,17 +53,7 @@ const dateShift = (iso: string, amount: number) => {
 
 const fifthBusinessDay = (month: string) => {
   const [year, monthNumber] = month.split("-").map(Number);
-  let count = 0;
-  const lastDay = new Date(year, monthNumber, 0).getDate();
-
-  for (let day = 1; day <= lastDay; day += 1) {
-    const weekday = new Date(year, monthNumber - 1, day).getDay();
-    if (weekday === 0 || weekday === 6) continue;
-    count += 1;
-    if (count === 5) return monthToDate(month, day);
-  }
-
-  return monthToDate(month, lastDay);
+  return businessDay(year, monthNumber, 5);
 };
 
 const paymentCycles = (month: string) => {
@@ -110,8 +100,8 @@ function DiariasPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);\n  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");\n  const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);\n  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
-    const now = new Date();
-    setMonth(`${now.getFullYear()}-${pad(now.getMonth() + 1)}`);
+    const now = toISO(new Date());
+    setMonth(now.slice(0, 7));
   }, []);
 
   const diaristas = useMemo(
