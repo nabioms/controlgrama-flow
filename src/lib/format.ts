@@ -61,14 +61,20 @@ const isWeekend = (d: Date) => d.getDay() === 0 || d.getDay() === 6;
 
 /** Nº dia útil do mês, pulando fins de semana e feriados nacionais. */
 export function businessDay(year: number, month: number, n: number): string {
+  // Datas de calendário (ex.: 5º dia útil) não representam um instante.
+  // Use UTC para que Web, Android e Windows tenham o mesmo resultado,
+  // independentemente do fuso configurado no dispositivo.
   let count = 0;
   for (let day = 1; day <= 31; day++) {
-    const d = new Date(year, month - 1, day);
-    if (d.getMonth() !== month - 1) break;
-    if (!isWeekend(d) && !isHoliday(d)) count++;
-    if (count === n) return toISO(d);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    if (d.getUTCMonth() !== month - 1) break;
+    const weekday = d.getUTCDay();
+    const monthDay = `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const holiday = NATIONAL_HOLIDAYS.includes(monthDay);
+    if (weekday !== 0 && weekday !== 6 && !holiday) count++;
+    if (count === n) return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   }
-  return toISO(new Date(year, month - 1, 5));
+  return `${year}-${String(month).padStart(2, "0")}-05`;
 }
 
 export const daysUntil = (iso: string, today = new Date()) => {
