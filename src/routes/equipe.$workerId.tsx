@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { FileText, Pencil, Upload, X } from "lucide-react";
+import { CheckCircle2, FileText, Pencil, RotateCcw, Upload, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState, SectionTitle } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -29,7 +29,7 @@ const docLabels: Record<string, string> = {
 
 function WorkerDetail() {
   const { workerId } = Route.useParams();
-  const { workers, teams, attendance, payments, updateWorker, deleteWorker, workerDocuments, workerEvents } = useStore();
+  const { workers, teams, attendance, payments, updateWorker, deleteWorker, updateWorkerEpi, workerEpis, workerDocuments, workerEvents } = useStore();
   const worker = workers.find((w) => w.id === workerId);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,6 +47,8 @@ function WorkerDetail() {
     admission_date: "",
     position: "",
     weekly_hours: "",
+    shirt_size: "",
+    shoe_size: "",
   });
 
   function startEditing() {
@@ -65,6 +67,8 @@ function WorkerDetail() {
       admission_date: worker.admission_date || "",
       position: worker.position || "",
       weekly_hours: worker.weekly_hours == null ? "" : String(worker.weekly_hours),
+      shirt_size: worker.shirt_size || "",
+      shoe_size: worker.shoe_size || "",
     });
     setEditing(true);
   }
@@ -90,6 +94,8 @@ function WorkerDetail() {
         admission_date: editForm.employment_type === "contratado" ? (editForm.admission_date || null) : null,
         position: editForm.employment_type === "contratado" ? (editForm.position.trim() || null) : null,
         weekly_hours: editForm.employment_type === "contratado" ? Number(editForm.weekly_hours || 44) : null,
+        shirt_size: editForm.shirt_size.trim() || null,
+        shoe_size: editForm.shoe_size.trim() || null,
       });
       setEditing(false);
     } catch (e: any) {
@@ -139,6 +145,8 @@ function WorkerDetail() {
           <div><dt className="text-muted-foreground">CPF</dt><dd className="font-semibold">{worker.cpf || "—"}</dd></div>
           <div><dt className="text-muted-foreground">RG</dt><dd className="font-semibold">{worker.rg || "—"}</dd></div>
           <div><dt className="text-muted-foreground">Telefone</dt><dd className="font-semibold">{worker.phone || "—"}</dd></div>
+          <div><dt className="text-muted-foreground">Camisa</dt><dd className="font-semibold">{worker.shirt_size || "—"}</dd></div>
+          <div><dt className="text-muted-foreground">Calçado</dt><dd className="font-semibold">{worker.shoe_size || "—"}</dd></div>
           <div><dt className="text-muted-foreground">Equipe</dt><dd className="font-semibold">{workerTeam?.name || "Sem equipe"}</dd></div>
           <div><dt className="text-muted-foreground">Admissão</dt><dd className="font-semibold">{formatDate(worker.admission_date)}</dd></div>
           <div className="col-span-2"><dt className="text-muted-foreground">Endereço</dt><dd className="font-semibold">{worker.address || "—"}</dd></div>
@@ -213,6 +221,8 @@ function WorkerDetail() {
             <div><label className="text-xs font-medium">CPF</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.cpf} onChange={(e) => setEditForm({ ...editForm, cpf: e.target.value })} /></div>
             <div><label className="text-xs font-medium">RG</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.rg} onChange={(e) => setEditForm({ ...editForm, rg: e.target.value })} /></div>
             <div><label className="text-xs font-medium">Telefone</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} /></div>
+            <div><label className="text-xs font-medium">Tamanho da camisa</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" placeholder="M, G, GG..." value={editForm.shirt_size} onChange={(e) => setEditForm({ ...editForm, shirt_size: e.target.value.toUpperCase() })} /></div>
+            <div><label className="text-xs font-medium">Tamanho do calçado</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" placeholder="Ex.: 40" value={editForm.shoe_size} onChange={(e) => setEditForm({ ...editForm, shoe_size: e.target.value })} /></div>
             <div><label className="text-xs font-medium">Função</label><select className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.job_role} onChange={(e) => setEditForm({ ...editForm, job_role: e.target.value as typeof editForm.job_role })}>{["roçador", "motorista", "encarregado", "auxiliar", "operador de máquina"].map((role) => <option key={role} value={role}>{role}</option>)}</select></div>
             <div className="sm:col-span-2"><label className="text-xs font-medium">Endereço</label><input className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.address} onChange={(e) => setEditForm({ ...editForm, address: e.target.value })} /></div>
             <div><label className="text-xs font-medium">Vínculo</label><select className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" value={editForm.employment_type} onChange={(e) => setEditForm({ ...editForm, employment_type: e.target.value as typeof editForm.employment_type })}><option value="diarista">Diarista</option><option value="contratado">Contratado (CLT)</option></select></div>
@@ -234,6 +244,41 @@ function WorkerDetail() {
         </Card>
       ) : null}
 
+      <Card className="mb-4">
+        <SectionTitle title="Controle de EPI" hint={worker.status === "desligado" ? "Confira a devolução dos equipamentos no desligamento." : "Marque os equipamentos entregues. A devolução fica disponível no desligamento."} />
+        <div className="space-y-2">
+          {[
+            ["mascara_facial", "Máscara facial"], ["luva", "Luva"], ["oculos", "Óculos"], ["avental", "Avental"],
+            ["caneleira", "Caneleira"], ["abafador", "Abafador"], ["uniforme", "Uniforme"], ["calcado", "Calçado"],
+          ].map(([kind, label]) => {
+            const epi = workerEpis.find((e) => e.worker_id === worker.id && e.epi_kind === kind);
+            if (!epi) return null;
+            return (
+              <div key={epi.id} className="flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <CheckCircle2 className={`size-4 ${epi.delivered ? "text-primary" : "text-muted-foreground"}`} />
+                  <div>
+                    <p className="text-sm font-semibold">{label}</p>
+                    <p className="text-[11px] text-muted-foreground">{epi.delivered ? "Entregue em " + formatDate(epi.delivered_at) : "Ainda não entregue"}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2 text-xs">
+                  <label className="flex items-center gap-1.5 rounded-lg bg-muted px-2 py-1.5">
+                    <input type="checkbox" checked={epi.delivered} onChange={() => updateWorkerEpi(epi.id, { delivered: !epi.delivered, delivered_at: !epi.delivered ? toISO(new Date()) : null })} />
+                    Entregue
+                  </label>
+                  <label className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 ${worker.status === "desligado" ? "bg-muted" : "bg-muted/50 text-muted-foreground"}`}>
+                    <input type="checkbox" disabled={worker.status !== "desligado"} checked={epi.returned} onChange={() => updateWorkerEpi(epi.id, { returned: !epi.returned, returned_at: !epi.returned ? toISO(new Date()) : null })} />
+                    <RotateCcw className="size-3" />
+                    Devolvido
+                  </label>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {worker.status !== "desligado" ? <p className="mt-3 text-[11px] text-muted-foreground">No desligamento, esta mesma ficha será usada para marcar o que foi devolvido.</p> : null}
+      </Card>
       {worker.employment_type === "contratado" ? (
         <Card className="mb-4">
           <SectionTitle title="Benefícios, férias e 13º" />
