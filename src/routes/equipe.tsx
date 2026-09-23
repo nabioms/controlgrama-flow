@@ -25,6 +25,7 @@ function EquipePage() {
   const { workers, teams, addWorker, addTeam, updateTeam, setTeamMembers } = useStore();
   const [view, setView] = useState<"pessoas" | "equipes">("equipes");
   const [filter, setFilter] = useState<"todos" | EmploymentType>("todos");
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
   const [openWorker, setOpenWorker] = useState(false);
   const [openTeam, setOpenTeam] = useState(false);
   const [openTeamId, setOpenTeamId] = useState<string | null>(null);
@@ -43,7 +44,11 @@ function EquipePage() {
     return <Outlet />;
   }
 
-  const list = workers.filter((w) => filter === "todos" || w.employment_type === filter);
+  const list = workers.filter((w) => {
+    const matchesType = filter === "todos" || w.employment_type === filter;
+    const matchesStatus = statusFilter === "todos" || (statusFilter === "ativos" ? w.status !== "desligado" : w.status === "desligado");
+    return matchesType && matchesStatus;
+  });
   const foremen = workers.filter((w) => w.status !== "desligado" && w.job_role === "encarregado");
   const activeTeams = teams.filter((t) => t.active);
 
@@ -202,15 +207,24 @@ function EquipePage() {
         </>
       ) : (
         <>
-          <div className="mb-4 flex items-center gap-2">
-            <div className="flex flex-1 gap-1 rounded-xl bg-muted p-1">
+          <div className="mb-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 gap-1 rounded-xl bg-muted p-1">
+                {(["ativos", "inativos", "todos"] as const).map((f) => (
+                  <button key={f} onClick={() => setStatusFilter(f)} className={`flex-1 rounded-lg py-2 text-xs font-semibold ${statusFilter === f ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>
+                    {f === "ativos" ? "Ativos" : f === "inativos" ? "Inativos" : "Todos"}
+                  </button>
+                ))}
+              </div>
+              <Button size="sm" onClick={() => setOpenWorker((v) => !v)}><UserPlus className="size-4" /></Button>
+            </div>
+            <div className="flex gap-1 rounded-xl bg-muted p-1">
               {(["todos", "diarista", "contratado"] as const).map((f) => (
                 <button key={f} onClick={() => setFilter(f)} className={`flex-1 rounded-lg py-2 text-xs font-semibold capitalize ${filter === f ? "bg-card text-primary shadow-sm" : "text-muted-foreground"}`}>
                   {f === "contratado" ? "CLT" : f}
                 </button>
               ))}
             </div>
-            <Button size="sm" onClick={() => setOpenWorker((v) => !v)}><UserPlus className="size-4" /></Button>
           </div>
 
           {openWorker ? (
