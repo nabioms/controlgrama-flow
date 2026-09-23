@@ -29,7 +29,7 @@ const docLabels: Record<string, string> = {
 
 function WorkerDetail() {
   const { workerId } = Route.useParams();
-  const { workers, teams, attendance, payments, updateWorker, workerDocuments, workerEvents } = useStore();
+  const { workers, teams, attendance, payments, updateWorker, deleteWorker, workerDocuments, workerEvents } = useStore();
   const worker = workers.find((w) => w.id === workerId);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -167,9 +167,28 @@ function WorkerDetail() {
               </Button>
             </>
           ) : (
-            <Button size="sm" variant="soft" onClick={() => updateWorker(worker.id, { status: "ativo", termination_date: null, termination_reason: null })}>
-              Reativar
-            </Button>
+            <>
+              <Button size="sm" variant="soft" onClick={() => updateWorker(worker.id, { status: "ativo", termination_date: null, termination_reason: null })}>
+                Reativar
+              </Button>
+              {worker.status === "desligado" ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  onClick={async () => {
+                    if (!window.confirm("Excluir definitivamente este cadastro? Essa ação não pode ser desfeita.")) return;
+                    try {
+                      await deleteWorker(worker.id);
+                      window.location.href = "/equipe";
+                    } catch (e: any) {
+                      setEditError(e?.message || "Não foi possível excluir o cadastro.");
+                    }
+                  }}
+                >
+                  Excluir cadastro
+                </Button>
+              ) : null}
+            </>
           )}
         </div>
         {worker.termination_reason ? (
