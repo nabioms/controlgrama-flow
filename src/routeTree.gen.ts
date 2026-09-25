@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DiariasRouteImport } from './routes/diarias'
 import { Route as EquipeRouteImport } from './routes/equipe'
+import { Route as EstoqueRouteImport } from './routes/estoque'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as OsRouteImport } from './routes/os'
 import { Route as PontoRouteImport } from './routes/ponto'
@@ -31,6 +32,11 @@ const DiariasRoute = DiariasRouteImport.update({
 const EquipeRoute = EquipeRouteImport.update({
   id: '/equipe',
   path: '/equipe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EstoqueRoute = EstoqueRouteImport.update({
+  id: '/estoque',
+  path: '/estoque',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceiroRoute = FinanceiroRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/diarias': typeof DiariasRoute
   '/equipe': typeof EquipeRouteWithChildren
+  '/estoque': typeof EstoqueRoute
   '/financeiro': typeof FinanceiroRoute
   '/os': typeof OsRoute
   '/ponto': typeof PontoRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/diarias': typeof DiariasRoute
   '/equipe': typeof EquipeRouteWithChildren
+  '/estoque': typeof EstoqueRoute
   '/financeiro': typeof FinanceiroRoute
   '/os': typeof OsRoute
   '/ponto': typeof PontoRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/diarias': typeof DiariasRoute
   '/equipe': typeof EquipeRouteWithChildren
+  '/estoque': typeof EstoqueRoute
   '/financeiro': typeof FinanceiroRoute
   '/os': typeof OsRoute
   '/ponto': typeof PontoRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/diarias'
     | '/equipe'
+    | '/estoque'
     | '/financeiro'
     | '/os'
     | '/ponto'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/diarias'
     | '/equipe'
+    | '/estoque'
     | '/financeiro'
     | '/os'
     | '/ponto'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/diarias'
     | '/equipe'
+    | '/estoque'
     | '/financeiro'
     | '/os'
     | '/ponto'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DiariasRoute: typeof DiariasRoute
   EquipeRoute: typeof EquipeRouteWithChildren
+  EstoqueRoute: typeof EstoqueRoute
   FinanceiroRoute: typeof FinanceiroRoute
   OsRoute: typeof OsRoute
   PontoRoute: typeof PontoRoute
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/equipe'
       fullPath: '/equipe'
       preLoaderRoute: typeof EquipeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/estoque': {
+      id: '/estoque'
+      path: '/estoque'
+      fullPath: '/estoque'
+      preLoaderRoute: typeof EstoqueRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financeiro': {
@@ -209,6 +229,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DiariasRoute: DiariasRoute,
   EquipeRoute: EquipeRouteWithChildren,
+  EstoqueRoute: EstoqueRoute,
   FinanceiroRoute: FinanceiroRoute,
   OsRoute: OsRoute,
   PontoRoute: PontoRoute,
