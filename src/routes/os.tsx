@@ -211,7 +211,7 @@ function ServiceOrdersPage() {
         const order = serviceOrders.find((o) => o.id === finishing);
         const items = order?.items || [];
         if (!items.length) throw new Error("Esta O.S. não possui linhas de serviço carregadas. Atualize a página e tente novamente.");
-        const quantities = items.map((item) => ({ item_id: item.id, quantity: parseQuantity(realizedInputs[item.id] ?? item.planned_quantity) }));
+        const quantities = items.map((item) => ({ item_id: item.id, quantity: parseQuantity(String(realizedInputs[item.id] ?? item.planned_quantity)) }));
         if (quantities.some((x) => !Number.isFinite(x.quantity) || x.quantity < 0)) throw new Error("Informe quantidades realizadas válidas.");
         await finalizeServiceOrder(finishing, status, quantities);
       }
@@ -354,7 +354,7 @@ function ServiceOrdersPage() {
             </Card>
           );
         })}
-        {!filteredOrders.length && <EmptyState title="Nenhuma O.S. encontrada" description="Altere o mês ou os filtros para consultar outros registros." />}
+        {!filteredOrders.length && <EmptyState text="Nenhuma O.S. encontrada. Altere o mês ou os filtros para consultar outros registros." />}
       </div>
 
       {editing && (

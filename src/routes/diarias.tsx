@@ -200,7 +200,7 @@ function DiariasPage() {
   if (!month) {
     return (
       <AppShell title="Diárias" subtitle="Carregando calendário...">
-        <Card />
+        <Card>{null}</Card>
       </AppShell>
     );
   }
