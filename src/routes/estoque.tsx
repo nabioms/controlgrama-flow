@@ -39,7 +39,9 @@ function EstoquePage() {
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<"itens" | "movimentar" | "emprestimos" | "historico">("itens");
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("Todas");
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [showItemForm, setShowItemForm] = useState(false);
 
   useEffect(() => {
     try {
@@ -78,6 +80,7 @@ function EstoquePage() {
   const [itemForm, setItemForm] = useState({ name: "", category: CATEGORIES[0]!, unit: "un", min_quantity: "0", initial: "0" });
   function resetItemForm() {
     setEditingItemId(null);
+    setShowItemForm(false);
     setItemForm({ name: "", category: CATEGORIES[0]!, unit: "un", min_quantity: "0", initial: "0" });
   }
 
@@ -101,6 +104,7 @@ function EstoquePage() {
 
   function editItem(item: StockItem) {
     setEditingItemId(item.id);
+    setShowItemForm(true);
     setItemForm({
       name: item.name,
       category: item.category,
@@ -140,7 +144,11 @@ function EstoquePage() {
   }
 
   const people = workers.filter((w) => w.status === "ativo");
-  const filtered = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()) || i.category.toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((i) => {
+    const matchesSearch = i.name.toLowerCase().includes(search.toLowerCase()) || i.category.toLowerCase().includes(search.toLowerCase());
+    const matchesCategory = categoryFilter === "Todas" || i.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
   const tabs = [
     ["itens", "Itens"], ["movimentar", "Movimentar"], ["emprestimos", `Com pessoas (${openLoans.length})`], ["historico", "Histórico"],
   ] as const;
@@ -165,22 +173,47 @@ function EstoquePage() {
 
       {tab === "itens" && (
         <>
-          <Card className="mb-4">
-            <SectionTitle title={editingItemId ? "Editar item" : "Cadastrar item"} />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Nome"><Input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Ex.: Roçadeira, fio de nylon" /></Field>
-              <Field label="Categoria"><Select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
-              <Field label="Unidade"><Select value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
-              <Field label="Estoque mínimo"><Input type="number" min={0} value={itemForm.min_quantity} onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })} /></Field>
-              {!editingItemId && <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>}
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold">Itens do estoque</h2>
+              <p className="text-xs text-muted-foreground">{items.length} cadastrado{items.length === 1 ? "" : "s"}</p>
             </div>
-            <div className="mt-3 flex gap-2">
-              <Button className="w-full" onClick={addItem}>{editingItemId ? "Salvar alterações" : "Adicionar item"}</Button>
-              {editingItemId && <Button variant="soft" onClick={resetItemForm}>Cancelar</Button>}
+            <Button onClick={() => { resetItemForm(); setShowItemForm(true); }}>
+              <Package className="size-4" /> Adicionar item
+            </Button>
+          </div>
+
+          <Card className="mb-4">
+            <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
+              <Field label="Buscar">
+                <Input placeholder="Buscar por nome ou categoria..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </Field>
+              <Field label="Filtrar por categoria">
+                <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                  <option value="Todas">Todas as categorias</option>
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </Select>
+              </Field>
             </div>
           </Card>
 
-          <Input className="mb-3" placeholder="Buscar item ou categoria" value={search} onChange={(e) => setSearch(e.target.value)} />
+          {showItemForm && (
+            <Card className="mb-4 border-primary/30">
+              <SectionTitle title={editingItemId ? "Editar item" : "Novo item"} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Nome"><Input autoFocus value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Ex.: Roçadeira, fio de nylon" /></Field>
+                <Field label="Categoria"><Select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+                <Field label="Unidade"><Select value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
+                <Field label="Estoque mínimo"><Input type="number" min={0} value={itemForm.min_quantity} onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })} /></Field>
+                {!editingItemId && <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <Button className="w-full" onClick={addItem}>{editingItemId ? "Salvar alterações" : "Adicionar item"}</Button>
+                <Button variant="soft" onClick={resetItemForm}>Cancelar</Button>
+              </div>
+            </Card>
+          )}
+
           <div className="space-y-2">
             {filtered.length === 0 ? <EmptyState text="Nenhum item cadastrado." /> : filtered.map((i) => {
               const qty = balance.get(i.id) ?? 0;
