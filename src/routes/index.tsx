@@ -84,10 +84,10 @@ function Dashboard() {
   const monthProduction = serviceOrders.filter((o) => o.service_date.startsWith(month) && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
   const todayProduction = serviceOrders.filter((o) => o.service_date === today && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
 
-  // Produção física realizada: somente O.S. concluídas/realizadas.
-  // Roçada soma os serviços medidos em m²; varrição soma os serviços medidos em km.
+  // Produção física realizada no mês: somente O.S. concluídas/realizadas.
+  // Mantemos roçada e Carpina Manual separados, mesmo ambos sendo medidos em m².
   const completedPhysical = serviceOrders
-    .filter((o) => o.status === "realizada")
+    .filter((o) => o.status === "realizada" && o.service_date.startsWith(month))
     .reduce(
       (totals, order) => {
         const items = order.items ?? [];
@@ -95,7 +95,8 @@ function Dashboard() {
           for (const item of items) {
             const type = item.service_type ?? serviceTypes.find((t) => t.id === item.service_type_id);
             const quantity = Number(item.realized_quantity ?? 0);
-            if (type?.unit === "m2") totals.m2 += quantity;
+            if (type?.name === "Carpina Manual") totals.carpina += quantity;
+            else if (type?.name === "Roçada c/ Trator" || type?.name === "Roçada Máquina") totals.m2 += quantity;
             if (type?.unit === "km") totals.km += quantity;
           }
           return totals;
@@ -103,11 +104,12 @@ function Dashboard() {
 
         const type = order.service_type ?? serviceTypes.find((t) => t.id === order.service_type_id);
         const quantity = Number(order.realized_quantity ?? 0);
-        if (type?.unit === "m2") totals.m2 += quantity;
+        if (type?.name === "Carpina Manual") totals.carpina += quantity;
+        else if (type?.name === "Roçada c/ Trator" || type?.name === "Roçada Máquina") totals.m2 += quantity;
         if (type?.unit === "km") totals.km += quantity;
         return totals;
       },
-      { m2: 0, km: 0 },
+      { m2: 0, km: 0, carpina: 0 },
     );
 
   const docAlerts = workerDocuments
@@ -142,17 +144,24 @@ function Dashboard() {
           icon={<Users className="size-4" />}
         />
         <StatCard
-          label="Área roçada"
+          label="Área roçada no mês"
           value={`${completedPhysical.m2.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m²`}
           sub="Roçada c/ Trator + Roçada Máquina"
           tone="success"
           icon={<Ruler className="size-4" />}
         />
         <StatCard
-          label="Varrição realizada"
+          label="Varrição no mês"
           value={`${completedPhysical.km.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} km`}
           sub="Somente O.S. realizadas"
           tone="info"
+          icon={<Ruler className="size-4" />}
+        />
+        <StatCard
+          label="Carpina Manual no mês"
+          value={`${completedPhysical.carpina.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m²`}
+          sub="Somente O.S. realizadas"
+          tone="success"
           icon={<Ruler className="size-4" />}
         />
       </div>
