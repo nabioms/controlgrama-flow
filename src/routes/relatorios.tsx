@@ -34,7 +34,7 @@ function downloadCsv(name: string, rows: (string | number)[][]) {
 }
 
 function RelatoriosPage() {
-  const { workers, attendance, payments, payables, receivables, contracts, expenseCategories } = useStore();
+  const { workers, attendance, payments, dailyAllowances, payables, receivables, contracts, expenseCategories } = useStore();
   const today = toISO(new Date());
   const [from, setFrom] = useState(today.slice(0, 8) + "01");
   const [to, setTo] = useState(today);
@@ -73,6 +73,24 @@ function RelatoriosPage() {
         p.method ?? "-",
       ]);
     });
+    return rows;
+  };
+
+  const ajudaCustoRows = () => {
+    const rows: (string | number)[][] = [["Data", "Diarista", "Valor", "Forma de pagamento", "Observação"]];
+    dailyAllowances
+      .filter((a) => inRange(a.date))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .forEach((a) => {
+        rows.push([
+          a.date,
+          workers.find((w) => w.id === a.worker_id)?.full_name ?? "—",
+          Number(a.amount),
+          a.method === "dinheiro" ? "Dinheiro" : a.method === "pix" ? "PIX" : "Transferência",
+          a.notes ?? "",
+        ]);
+      });
+    rows.push(["", "TOTAL", dailyAllowances.filter((a) => inRange(a.date)).reduce((s, a) => s + Number(a.amount), 0), "", ""]);
     return rows;
   };
 
@@ -115,6 +133,7 @@ function RelatoriosPage() {
   const reports = [
     { key: "folha-de-ponto", title: "Folha de ponto mensal", hint: "Presenças, faltas e justificativas por trabalhador", build: pontoRows },
     { key: "pagamentos-diarias", title: "Pagamentos de diárias", hint: "Por período, com forma de pagamento", build: diariasRows },
+    { key: "ajuda-de-custo", title: "Ajuda de custo dos diaristas", hint: "Pagamentos diários separados das diárias do 5º dia útil", build: ajudaCustoRows },
     { key: "financeiro", title: "Receitas x despesas", hint: "Todas as movimentações do período", build: financeiroRows },
     { key: "por-contrato", title: "Relatório por contrato", hint: "Rentabilidade por frente de serviço", build: contractRows },
   ];
