@@ -79,6 +79,8 @@ export type PaymentStatus = "pendente" | "pago";
 export interface PaymentPeriod { id: UUID; label: string; cycle: PaymentCycle; start_date: ISODate; end_date: ISODate; pay_date: ISODate; status: PeriodStatus; }
 export interface Payment { id: UUID; period_id: UUID; worker_id: UUID; worked_days: number; daily_rate: number | null; gross_amount: number; status: PaymentStatus; paid_at: ISODate | null; method: PaymentMethod | null; receipt_url: string | null; }
 
+export interface DailyAllowance { id: UUID; worker_id: UUID; date: ISODate; amount: number; method: PaymentMethod; paid_at: string; notes: string | null; created_at: string; updated_at: string; }
+
 export interface Contract { id: UUID; number: string; agency: string; description: string; total_value: number; start_date: ISODate; end_date: ISODate; status: "vigente" | "encerrado"; }
 export interface Receivable { id: UUID; contract_id: UUID | null; service_order_id: UUID | null; reference_period: string; expected_amount: number; expected_date: ISODate; status: "pendente" | "recebido"; received_at: ISODate | null; commitment_note: string | null; }
 export type ExpenseCategoryKey = "combustivel" | "manutencao" | "mao_de_obra" | "epi" | "impostos" | "administrativo";
