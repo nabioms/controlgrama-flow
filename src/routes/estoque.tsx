@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Package, RotateCcw, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Package, Pencil, RotateCcw, Trash2, UserRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, SectionTitle, Select, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -39,6 +39,7 @@ function EstoquePage() {
   const [loaded, setLoaded] = useState(false);
   const [tab, setTab] = useState<"itens" | "movimentar" | "emprestimos" | "historico">("itens");
   const [search, setSearch] = useState("");
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -75,13 +76,40 @@ function EstoquePage() {
 
   // Formulário de item
   const [itemForm, setItemForm] = useState({ name: "", category: CATEGORIES[0]!, unit: "un", min_quantity: "0", initial: "0" });
+  function resetItemForm() {
+    setEditingItemId(null);
+    setItemForm({ name: "", category: CATEGORIES[0]!, unit: "un", min_quantity: "0", initial: "0" });
+  }
+
   function addItem() {
     if (!itemForm.name.trim()) return;
+    if (editingItemId) {
+      setItems((p) => p.map((item) => item.id === editingItemId
+        ? { ...item, name: itemForm.name.trim(), category: itemForm.category, unit: itemForm.unit, min_quantity: Number(itemForm.min_quantity) || 0 }
+        : item
+      ));
+      resetItemForm();
+      return;
+    }
+
     const item: StockItem = { id: uid(), name: itemForm.name.trim(), category: itemForm.category, unit: itemForm.unit, min_quantity: Number(itemForm.min_quantity) || 0, created_at: toISO(new Date()) };
     setItems((p) => [...p, item]);
     const initial = Number(itemForm.initial) || 0;
     if (initial > 0) setMoves((p) => [...p, { id: uid(), item_id: item.id, kind: "entrada", quantity: initial, date: item.created_at, person: null, notes: "Estoque inicial", loan_id: null }]);
-    setItemForm({ ...itemForm, name: "", min_quantity: "0", initial: "0" });
+    resetItemForm();
+  }
+
+  function editItem(item: StockItem) {
+    setEditingItemId(item.id);
+    setItemForm({
+      name: item.name,
+      category: item.category,
+      unit: item.unit,
+      min_quantity: String(item.min_quantity),
+      initial: "0",
+    });
+    setTab("itens");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
   function removeItem(id: string) {
     if (!confirm("Excluir este item e todo o seu histórico?")) return;
@@ -137,15 +165,18 @@ function EstoquePage() {
       {tab === "itens" && (
         <>
           <Card className="mb-4">
-            <SectionTitle title="Cadastrar item" />
+            <SectionTitle title={editingItemId ? "Editar item" : "Cadastrar item"} />
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Nome"><Input value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Ex.: Roçadeira, fio de nylon" /></Field>
               <Field label="Categoria"><Select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
               <Field label="Unidade"><Select value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
               <Field label="Estoque mínimo"><Input type="number" min={0} value={itemForm.min_quantity} onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })} /></Field>
-              <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>
+              {!editingItemId && <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>}
             </div>
-            <Button className="mt-3 w-full" onClick={addItem}>Adicionar item</Button>
+            <div className="mt-3 flex gap-2">
+              <Button className="w-full" onClick={addItem}>{editingItemId ? "Salvar alterações" : "Adicionar item"}</Button>
+              {editingItemId && <Button variant="soft" onClick={resetItemForm}>Cancelar</Button>}
+            </div>
           </Card>
 
           <Input className="mb-3" placeholder="Buscar item ou categoria" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -161,7 +192,8 @@ function EstoquePage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge tone={qty <= i.min_quantity ? "danger" : "success"}>{qty} {i.unit}</Badge>
-                    <button type="button" aria-label="Excluir item" onClick={() => removeItem(i.id)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><Trash2 className="size-4" /></button>
+                    <button type="button" aria-label={`Editar ${i.name}`} onClick={() => editItem(i)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><Pencil className="size-4" /></button>
+                    <button type="button" aria-label={`Excluir ${i.name}`} onClick={() => removeItem(i.id)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><Trash2 className="size-4" /></button>
                   </div>
                 </div>
               );
