@@ -21,7 +21,9 @@ interface Store {
   deleteServiceOrder:(id:string)=>Promise<void>;
   finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>Promise<void>;
 }
-const StoreContext=createContext<Store|null>(null);
+// Mantém o mesmo contexto entre recarregamentos rápidos (HMR), evitando provider/consumer de instâncias diferentes.
+const g=globalThis as unknown as {__controlgramaStoreCtx?:React.Context<Store|null>};
+const StoreContext=g.__controlgramaStoreCtx??(g.__controlgramaStoreCtx=createContext<Store|null>(null));
 const date=(v:any)=>v?v.slice(0,10):null;
 const worker=(r:any):Worker=>({...r,admission_date:date(r.admission_date),termination_date:date(r.termination_date),created_at:date(r.created_at)||toISO(new Date())});
 const payable=(r:any):Payable=>({...r,due_date:date(r.due_date),paid_at:date(r.paid_at)});
