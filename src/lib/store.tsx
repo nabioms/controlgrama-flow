@@ -1,18 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode, type Context } from "react";
 import { supabase } from "./supabase";
 import { businessDay, daysUntil, toISO } from "./format";
-import type { Attendance, AttendanceStatus, CashFlowMonth, Contract, ExpenseCategory, Invoice, Payable, Payment, PaymentMethod, PaymentPeriod, Receivable, ServiceOrder, ServiceOrderStatus, ServiceType, Team, UserRole, Worker, WorkerDocument, WorkerEvent, WorkerEpi, EpiKind } from "./types";
+import type { Attendance, AttendanceStatus, CashFlowMonth, Contract, DailyAllowance, ExpenseCategory, Invoice, Payable, Payment, PaymentMethod, PaymentPeriod, Receivable, ServiceOrder, ServiceOrderStatus, ServiceType, Team, UserRole, Worker, WorkerDocument, WorkerEvent, WorkerEpi, EpiKind } from "./types";
 
 interface Store {
   role: UserRole; workers: Worker[]; contracts: Contract[]; expenseCategories: ExpenseCategory[]; invoices: Invoice[];
   workerDocuments: WorkerDocument[]; workerEvents: WorkerEvent[]; workerEpis: WorkerEpi[]; attendance: Attendance[]; paymentPeriods: PaymentPeriod[];
-  payments: Payment[]; receivables: Receivable[]; payables: Payable[]; cashFlowHistory: CashFlowMonth[]; teams: Team[]; serviceTypes: ServiceType[]; serviceOrders: ServiceOrder[];
+  payments: Payment[]; dailyAllowances: DailyAllowance[]; receivables: Receivable[]; payables: Payable[]; cashFlowHistory: CashFlowMonth[]; teams: Team[]; serviceTypes: ServiceType[]; serviceOrders: ServiceOrder[];
   nextPayDate: {date:string;label:string;days:number}; cashBalance:number; loading:boolean; error:string|null;
   refresh:()=>Promise<void>; addWorker:(w:Worker,teamId?:string|null)=>Promise<void>; updateWorker:(id:string,patch:Partial<Worker>)=>Promise<void>; deleteWorker:(id:string)=>Promise<void>; updateWorkerEpi:(id:string,patch:Partial<Pick<WorkerEpi,"delivered"|"returned"|"delivered_at"|"returned_at">>)=>Promise<void>;
   setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction?:number)=>Promise<void>;
   deleteAttendance:(id:string)=>Promise<void>;
   closePeriod:(id:string)=>Promise<void>; closePaymentCycle:(input:{cycle:PaymentPeriod["cycle"];label:string;start_date:string;end_date:string;pay_date:string})=>Promise<void>; markPaymentPaid:(id:string,m:PaymentMethod)=>Promise<void>;
-  markReceived:(id:string)=>Promise<void>; addPayable:(p:Payable)=>Promise<void>; markPayablePaid:(id:string)=>Promise<void>;
+  markReceived:(id:string)=>Promise<void>; addDailyAllowance:(input:{worker_id:string;date:string;amount?:number;method:PaymentMethod;notes?:string|null})=>Promise<void>; deleteDailyAllowance:(id:string)=>Promise<void>; addPayable:(p:Payable)=>Promise<void>; markPayablePaid:(id:string)=>Promise<void>;
   addTeam:(name:string,foremanWorkerId:string|null)=>Promise<void>; updateTeam:(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"active">>)=>Promise<void>; setTeamMembers:(teamId:string,workerIds:string[])=>Promise<void>;
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
@@ -34,7 +34,7 @@ export function StoreProvider({children}:{children:ReactNode}){
  const [role,setRole]=useState<UserRole>("encarregado"),[workers,setWorkers]=useState<Worker[]>([]),[contracts,setContracts]=useState<Contract[]>([]);
  const [expenseCategories,setExpenseCategories]=useState<ExpenseCategory[]>([]),[invoices,setInvoices]=useState<Invoice[]>([]),[workerDocuments,setWorkerDocuments]=useState<WorkerDocument[]>([]),[workerEvents,setWorkerEvents]=useState<WorkerEvent[]>([]),[workerEpis,setWorkerEpis]=useState<WorkerEpi[]>([]);
  const [attendance,setAttendance]=useState<Attendance[]>([]),[paymentPeriods,setPaymentPeriods]=useState<PaymentPeriod[]>([]),[payments,setPayments]=useState<Payment[]>([]);
- const [receivables,setReceivables]=useState<Receivable[]>([]),[payables,setPayables]=useState<Payable[]>([]),[cashFlowHistory,setCashFlowHistory]=useState<CashFlowMonth[]>([]);
+ const [dailyAllowances,setDailyAllowances]=useState<DailyAllowance[]>([]),[receivables,setReceivables]=useState<Receivable[]>([]),[payables,setPayables]=useState<Payable[]>([]),[cashFlowHistory,setCashFlowHistory]=useState<CashFlowMonth[]>([]);
  const [teams,setTeams]=useState<Team[]>([]),[serviceTypes,setServiceTypes]=useState<ServiceType[]>([]),[serviceOrders,setServiceOrders]=useState<ServiceOrder[]>([]);
  const [openingBalance,setOpeningBalance]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState<string|null>(null);
 
@@ -45,7 +45,7 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("contracts").select("*").order("start_date",{ascending:false}),supabase.from("expense_categories").select("*").order("label"),
    supabase.from("invoices").select("*").order("issue_date",{ascending:false}),supabase.from("worker_documents").select("*").order("expires_at"),
    supabase.from("worker_events").select("*").order("date",{ascending:false}),supabase.from("worker_epis").select("*").order("epi_kind"),supabase.from("attendance").select("*").order("date",{ascending:false}),
-   supabase.from("payment_periods").select("*").order("pay_date",{ascending:false}),supabase.from("payments").select("*").order("created_at",{ascending:false}),
+   supabase.from("payment_periods").select("*").order("pay_date",{ascending:false}),supabase.from("payments").select("*").order("created_at",{ascending:false}),supabase.from("daily_allowances").select("*").order("date",{ascending:false}).order("created_at",{ascending:false}),
    supabase.from("receivables").select("*").order("expected_date"),supabase.from("payables").select("*").order("due_date"),
    supabase.from("cash_settings").select("opening_balance").eq("id",true).maybeSingle(),
    supabase.from("teams").select("*, team_members(team_id,worker_id,worker:workers(*))").order("name"),
@@ -53,10 +53,10 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*), team:teams(*), service_order_workers(worker_id, worker:workers(*)), service_order_items(*, service_type:service_types(*))").order("service_date",{ascending:false}).order("order_number",{ascending:false})
   ]);
   const bad=q.find(x=>x.error); if(bad?.error){setError(bad.error.message);setLoading(false);return;}
-  const [pr,w,c,cat,inv,docs,events,epis,att,periods,pay,rec,pb,settings,tm,st,so]=q;
+  const [pr,w,c,cat,inv,docs,events,epis,att,periods,pay,allowances,rec,pb,settings,tm,st,so]=q;
   setRole((pr.data?.role as UserRole)||"encarregado");setWorkers((w.data||[]).map(worker));setContracts(c.data||[]);setExpenseCategories(cat.data||[]);
   setInvoices(inv.data||[]);setWorkerDocuments(docs.data||[]);setWorkerEvents(events.data||[]);setWorkerEpis((epis.data||[]) as WorkerEpi[]);setAttendance(att.data||[]);setPaymentPeriods(periods.data||[]);
-  setPayments((pay.data||[]).map(payment));setReceivables((rec.data||[]).map(receivable));setPayables((pb.data||[]).map(payable));
+  setPayments((pay.data||[]).map(payment));setDailyAllowances((allowances.data||[]) as DailyAllowance[]);setReceivables((rec.data||[]).map(receivable));setPayables((pb.data||[]).map(payable));
    const workerRows=(w.data||[]).map(worker);
   const teamRows:any[]=tm.data||[];
   setTeams(teamRows.map(t=>({...t,foreman:workerRows.find(x=>x.id===t.foreman_worker_id)||null,members:(t.team_members||[]).map((m:any)=>workerRows.find(x=>x.id===m.worker_id)||m.worker).filter(Boolean)})) as Team[]);
@@ -104,6 +104,7 @@ export function StoreProvider({children}:{children:ReactNode}){
    .on("postgres_changes",{event:"*",schema:"public",table:"payment_periods"},sync)
    .on("postgres_changes",{event:"*",schema:"public",table:"receivables"},sync)
    .on("postgres_changes",{event:"*",schema:"public",table:"payables"},sync)
+   .on("postgres_changes",{event:"*",schema:"public",table:"daily_allowances"},sync)
    .subscribe();
 
   return ()=>{
@@ -217,6 +218,18 @@ export function StoreProvider({children}:{children:ReactNode}){
 },[workers,attendance,refresh]);
 
  const markReceived=useCallback(async(id:string)=>{const {error}=await supabase.from("receivables").update({status:"recebido",received_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
+ const addDailyAllowance=useCallback(async(input:{worker_id:string;date:string;amount?:number;method:PaymentMethod;notes?:string|null})=>{
+  const amount=Number(input.amount??20);
+  if(!Number.isFinite(amount)||amount<=0)throw new Error("Informe um valor de ajuda de custo válido.");
+  const {data,error}=await supabase.from("daily_allowances").insert({worker_id:input.worker_id,date:input.date,amount,method:input.method,notes:input.notes||null}).select("*").single();
+  if(error)throw error;
+  setDailyAllowances(x=>[data as DailyAllowance,...x]);
+ },[]);
+ const deleteDailyAllowance=useCallback(async(id:string)=>{
+  const {error}=await supabase.from("daily_allowances").delete().eq("id",id);
+  if(error)throw error;
+  setDailyAllowances(x=>x.filter(a=>a.id!==id));
+ },[]);
  const addPayable=useCallback(async(p:Payable)=>{const {id,paid_at,...row}=p;const {data,error}=await supabase.from("payables").insert({...row,paid_at:null}).select("*").single();if(error)throw error;setPayables(x=>[payable(data),...x])},[]);
  const markPayablePaid=useCallback(async(id:string)=>{const {error}=await supabase.from("payables").update({status:"pago",paid_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const addTeam=useCallback(async(name:string,foremanWorkerId:string|null)=>{const clean=name.trim();if(!clean)throw new Error("Informe o nome da equipe.");let foreman:Worker|null=null;if(foremanWorkerId){foreman=workers.find(w=>w.id===foremanWorkerId)||null;if(!foreman)throw new Error("Encarregado não encontrado.");if(foreman.job_role!=="encarregado")throw new Error("O responsável da equipe precisa estar cadastrado como encarregado.");}const {data,error}=await supabase.from("teams").insert({name:clean,foreman_worker_id:foremanWorkerId||null}).select("*").single();if(error)throw error;if(foremanWorkerId){await supabase.from("team_members").delete().eq("worker_id",foremanWorkerId);const {error:memberError}=await supabase.from("team_members").insert({team_id:data.id,worker_id:foremanWorkerId});if(memberError){await supabase.from("teams").delete().eq("id",data.id);throw memberError;}}await refresh()},[workers,refresh]);
@@ -296,8 +309,8 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
  const [yy,mm]=todayISO.split("-").map(Number);
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — pagamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — pagamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
- const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
+ const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0),paidAllowances=dailyAllowances.reduce((s,a)=>s+Number(a.amount||0),0);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}
