@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { CheckCircle2, FileText, Pencil, RotateCcw, Upload, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, Pencil, RotateCcw, Trash2, Upload, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState, SectionTitle } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -183,17 +183,12 @@ function WorkerDetail() {
                 <Button
                   size="sm"
                   variant="danger"
-                  onClick={async () => {
-                    if (!window.confirm("ATENÇÃO: este cadastro será excluído definitivamente do ControlGrama.\n\nA exclusão é irreversível e só deve ser usada para cadastros criados por engano ou que não possuem histórico de ponto, pagamentos, documentos, eventos ou O.S.\n\nDepois de excluir, não será possível recuperar o cadastro.\n\nDeseja realmente excluir?")) return;
-                    try {
-                      await deleteWorker(worker.id);
-                      window.location.href = "/equipe";
-                    } catch (e: any) {
-                      setEditError(e?.message || "Não foi possível excluir o cadastro.");
-                    }
+                  onClick={() => {
+                    setEditError("");
+                    setDeleteOpen(true);
                   }}
                 >
-                  Excluir cadastro
+                  <Trash2 className="size-3.5" /> Excluir definitivamente
                 </Button>
               ) : null}
             </>
@@ -369,6 +364,108 @@ function WorkerDetail() {
           </div>
         ))}
       </div>
+
+      {deleteOpen ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 p-3 backdrop-blur-[2px] sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-worker-title"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deleting) setDeleteOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-3xl border border-destructive/15 bg-card shadow-2xl">
+            <div className="bg-gradient-to-br from-destructive/10 via-card to-card px-5 pb-4 pt-5">
+              <div className="flex items-start gap-3">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-destructive/10 text-destructive">
+                  <AlertTriangle className="size-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p id="delete-worker-title" className="font-display text-lg font-semibold">
+                    Excluir cadastro definitivamente?
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Você está prestes a excluir <span className="font-semibold text-foreground">{worker.full_name}</span>.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Fechar"
+                  disabled={deleting}
+                  onClick={() => setDeleteOpen(false)}
+                  className="rounded-xl p-2 text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 pb-5">
+              <div className="rounded-2xl border border-destructive/15 bg-destructive/[0.045] p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-destructive">
+                  Esta ação é permanente
+                </p>
+                <p className="mt-2 text-sm leading-5 text-muted-foreground">
+                  O cadastro será removido do ControlGrama e não poderá ser recuperado depois.
+                  Use esta opção somente para corrigir cadastros que realmente precisam ser apagados.
+                </p>
+              </div>
+
+              <div className="mt-4 space-y-2.5 text-xs text-muted-foreground">
+                <div className="flex gap-2">
+                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-destructive" />
+                  <span>O trabalhador deixará de aparecer no cadastro da equipe.</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-destructive" />
+                  <span>Os dados vinculados serão excluídos conforme as regras do sistema.</span>
+                </div>
+                <div className="flex gap-2">
+                  <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-destructive" />
+                  <span>Depois da confirmação, não será possível desfazer a exclusão.</span>
+                </div>
+              </div>
+
+              {editError ? (
+                <div className="mt-4 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-xs font-medium leading-5 text-destructive">
+                  {editError}
+                </div>
+              ) : null}
+
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={deleting}
+                  onClick={() => setDeleteOpen(false)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="danger"
+                  className="w-full"
+                  disabled={deleting}
+                  onClick={async () => {
+                    setDeleting(true);
+                    setEditError("");
+                    try {
+                      await deleteWorker(worker.id);
+                      window.location.href = "/equipe";
+                    } catch (e: any) {
+                      setEditError(e?.message || "Não foi possível excluir o cadastro.");
+                      setDeleting(false);
+                    }
+                  }}
+                >
+                  <Trash2 className="size-3.5" />
+                  {deleting ? "Excluindo..." : "Excluir definitivamente"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <SectionTitle title="Histórico de eventos" hint="Advertências, promoções e mudanças de função" />
       <div className="space-y-2">
