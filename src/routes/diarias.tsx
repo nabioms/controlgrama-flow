@@ -97,7 +97,10 @@ function DiariasPage() {
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);\n  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");\n  const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);\n  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
+  const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   useEffect(() => {
     const now = toISO(new Date());
