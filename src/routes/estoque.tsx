@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Package, Pencil
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, SectionTitle, Select, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { formatDate, toISO } from "@/lib/format";
 
 export const Route = createFileRoute("/estoque")({
@@ -37,6 +38,7 @@ function EstoquePage() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [moves, setMoves] = useState<StockMovement[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const [tab, setTab] = useState<"itens" | "movimentar" | "emprestimos" | "historico">("itens");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("Todas");
@@ -44,13 +46,89 @@ function EstoquePage() {
   const [showItemForm, setShowItemForm] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) { const d = JSON.parse(raw); setItems(d.items ?? []); setMoves(d.moves ?? []); }
-    } catch { /* ignora dados inválidos */ }
-    setLoaded(true);
+    let disposed = false;
+    const load = async () => {
+      try {
+        const raw = localStorage.getItem(KEY);
+        const local = raw ? JSON.parse(raw) : { items: [], moves: [] };
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id ?? null;
+        if (!uid) {
+          if (!disposed) {
+            setItems(local.items ?? []);
+            setMoves(local.moves ?? []);
+            setLoaded(true);
+          }
+          return;
+        }
+        setUserId(uid);
+        const [{ data: cloudItems, error: itemsError }, { data: cloudMoves, error: movesError }] = await Promise.all([
+          supabase.from("stock_items").select("*").order("created_at"),
+          supabase.from("stock_movements").select("*").order("date").order("created_at"),
+        ]);
+        if (itemsError) throw itemsError;
+        if (movesError) throw movesError;
+
+        const localItems: StockItem[] = local.items ?? [];
+        const localMoves: StockMovement[] = local.moves ?? [];
+        const cloudItemIds = new Set((cloudItems ?? []).map((x: any) => x.id));
+        const cloudMoveIds = new Set((cloudMoves ?? []).map((x: any) => x.id));
+
+        // Migra automaticamente o estoque que já estava salvo no celular para o Supabase.
+        const missingItems = localItems.filter(x => !cloudItemIds.has(x.id));
+        const missingMoves = localMoves.filter(x => !cloudMoveIds.has(x.id));
+        if (missingItems.length) {
+          const { error } = await supabase.from("stock_items").insert(missingItems.map(x => ({ ...x, user_id: uid })));
+          if (error) throw error;
+        }
+        if (missingMoves.length) {
+          const { error } = await supabase.from("stock_movements").insert(missingMoves.map(x => ({ ...x, user_id: uid })));
+          if (error) throw error;
+        }
+
+        const finalItems = missingItems.length ? [...(cloudItems ?? []), ...missingItems.map(x => ({ ...x, user_id: uid }))] : (cloudItems ?? []);
+        const finalMoves = missingMoves.length ? [...(cloudMoves ?? []), ...missingMoves.map(x => ({ ...x, user_id: uid }))] : (cloudMoves ?? []);
+        if (!disposed) {
+          setItems(finalItems as StockItem[]);
+          setMoves(finalMoves as StockMovement[]);
+          setLoaded(true);
+        }
+      } catch (error) {
+        console.error("Falha ao carregar estoque:", error);
+        try {
+          const raw = localStorage.getItem(KEY);
+          const local = raw ? JSON.parse(raw) : { items: [], moves: [] };
+          if (!disposed) {
+            setItems(local.items ?? []);
+            setMoves(local.moves ?? []);
+          }
+        } catch {}
+        if (!disposed) setLoaded(true);
+      }
+    };
+    void load();
+    return () => { disposed = true; };
   }, []);
-  useEffect(() => { if (loaded) localStorage.setItem(KEY, JSON.stringify({ items, moves })); }, [items, moves, loaded]);
+
+  useEffect(() => {
+    if (loaded) localStorage.setItem(KEY, JSON.stringify({ items, moves }));
+  }, [items, moves, loaded]);
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel("controlgrama-stock-sync")
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_items" }, async () => {
+        const { data } = await supabase.from("stock_items").select("*").order("created_at");
+        if (data) setItems(data as StockItem[]);
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "stock_movements" }, async () => {
+        const { data } = await supabase.from("stock_movements").select("*").order("date").order("created_at");
+        if (data) setMoves(data as StockMovement[]);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [userId]);
 
   const returnedByLoan = useMemo(() => {
     const m = new Map<string, number>();
@@ -87,10 +165,9 @@ function EstoquePage() {
   function addItem() {
     if (!itemForm.name.trim()) return;
     if (editingItemId) {
-      setItems((p) => p.map((item) => item.id === editingItemId
-        ? { ...item, name: itemForm.name.trim(), category: itemForm.category, unit: itemForm.unit, min_quantity: Number(itemForm.min_quantity) || 0 }
-        : item
-      ));
+      const patch = { name: itemForm.name.trim(), category: itemForm.category, unit: itemForm.unit, min_quantity: Number(itemForm.min_quantity) || 0 };
+      setItems((p) => p.map((item) => item.id === editingItemId ? { ...item, ...patch } : item));
+      if (userId) void supabase.from("stock_items").update(patch).eq("id", editingItemId);
       resetItemForm();
       return;
     }
@@ -98,7 +175,12 @@ function EstoquePage() {
     const item: StockItem = { id: uid(), name: itemForm.name.trim(), category: itemForm.category, unit: itemForm.unit, min_quantity: Number(itemForm.min_quantity) || 0, created_at: toISO(new Date()) };
     setItems((p) => [...p, item]);
     const initial = Number(itemForm.initial) || 0;
-    if (initial > 0) setMoves((p) => [...p, { id: uid(), item_id: item.id, kind: "entrada", quantity: initial, date: item.created_at, person: null, notes: "Estoque inicial", loan_id: null }]);
+    const initialMove: StockMovement | null = initial > 0 ? { id: uid(), item_id: item.id, kind: "entrada", quantity: initial, date: item.created_at, person: null, person_worker_id: null, notes: "Estoque inicial", loan_id: null } : null;
+    if (userId) {
+      void supabase.from("stock_items").insert({ ...item, user_id: userId });
+      if (initialMove) void supabase.from("stock_movements").insert({ ...initialMove, user_id: userId });
+    }
+    if (initialMove) setMoves((p) => [...p, initialMove]);
     resetItemForm();
   }
 
@@ -119,6 +201,7 @@ function EstoquePage() {
     if (!confirm("Excluir este item e todo o seu histórico?")) return;
     setItems((p) => p.filter((i) => i.id !== id));
     setMoves((p) => p.filter((m) => m.item_id !== id));
+    if (userId) void supabase.from("stock_items").delete().eq("id", id);
   }
 
   // Formulário de movimentação
@@ -132,7 +215,9 @@ function EstoquePage() {
     if ((mv.kind === "saida" || mv.kind === "retirada") && qty > (balance.get(mv.item_id) ?? 0)) return setMvError("Quantidade maior que o saldo disponível.");
     if (mv.kind === "retirada" && !mv.person_worker_id) return setMvError("Selecione o funcionário ou diarista que pegou o item.");
     const selectedWorker = workers.find((w) => w.id === mv.person_worker_id);
-    setMoves((p) => [...p, { id: uid(), item_id: mv.item_id, kind: mv.kind, quantity: qty, date: mv.date, person: selectedWorker?.full_name || mv.person.trim() || null, person_worker_id: selectedWorker?.id || null, notes: mv.notes.trim() || null, loan_id: null }]);
+    const movement: StockMovement = { id: uid(), item_id: mv.item_id, kind: mv.kind, quantity: qty, date: mv.date, person: selectedWorker?.full_name || mv.person.trim() || null, person_worker_id: selectedWorker?.id || null, notes: mv.notes.trim() || null, loan_id: null };
+    setMoves((p) => [...p, movement]);
+    if (userId) void supabase.from("stock_movements").insert({ ...movement, user_id: userId });
     setMv({ ...mv, quantity: "1", person: "", person_worker_id: "", notes: "" });
   }
   function giveBack(loanId: string, pending: number) {
@@ -140,7 +225,9 @@ function EstoquePage() {
     const qty = Number(input);
     if (!input || !(qty > 0) || qty > pending) return;
     const loan = moves.find((m) => m.id === loanId)!;
-    setMoves((p) => [...p, { id: uid(), item_id: loan.item_id, kind: "devolucao", quantity: qty, date: toISO(new Date()), person: loan.person, person_worker_id: loan.person_worker_id || null, notes: null, loan_id: loanId }]);
+    const movement: StockMovement = { id: uid(), item_id: loan.item_id, kind: "devolucao", quantity: qty, date: toISO(new Date()), person: loan.person, person_worker_id: loan.person_worker_id || null, notes: null, loan_id: loanId };
+    setMoves((p) => [...p, movement]);
+    if (userId) void supabase.from("stock_movements").insert({ ...movement, user_id: userId });
   }
 
   const people = workers.filter((w) => w.status === "ativo");
