@@ -57,6 +57,8 @@ export const workers: Worker[] = [
     id: "w-1",
     full_name: "José Carlos Ferreira",
     cpf: "045.218.377-10",
+    shirt_size: null,
+    shoe_size: null,
     rg: "MG-12.884.551",
     phone: "(31) 98814-2210",
     address: "Rua das Acácias, 120 — Bairro São Pedro",
@@ -80,6 +82,8 @@ export const workers: Worker[] = [
     id: "w-2",
     full_name: "Antônio Marcos Silva",
     cpf: "112.904.556-22",
+    shirt_size: null,
+    shoe_size: null,
     rg: "MG-9.551.207",
     phone: "(31) 99120-7744",
     address: "Av. Central, 88 — Vila Nova",
@@ -112,6 +116,8 @@ export const workers: Worker[] = [
     id: id as string,
     full_name: name as string,
     cpf: `0${30 + i}.${100 + i * 7}.${200 + i * 3}-0${i}`,
+    shirt_size: null,
+    shoe_size: null,
     rg: `MG-${10 + i}.${200 + i * 11}.${300 + i}`,
     phone: `(31) 9${8000 + i * 137}-${1000 + i * 91}`,
     address: `Rua ${["Bela Vista", "do Campo", "das Palmeiras", "Sete de Setembro", "Minas", "do Sol", "Nova", "Verde"][i]}, ${20 + i * 13}`,
@@ -246,10 +252,10 @@ export const payments: Payment[] = workers
 /* ------------------- receivables, payables, invoices ------------------ */
 
 export const receivables: Receivable[] = [
-  { id: "rc-1", contract_id: "ct-1", reference_period: `${prevY}-${String(prevM).padStart(2, "0")}`, expected_amount: 40500, expected_date: `${y}-${String(m).padStart(2, "0")}-10`, status: "recebido", received_at: `${y}-${String(m).padStart(2, "0")}-11`, commitment_note: "NE 2026/1187" },
-  { id: "rc-2", contract_id: "ct-2", reference_period: `${prevY}-${String(prevM).padStart(2, "0")}`, expected_amount: 17700, expected_date: `${y}-${String(m).padStart(2, "0")}-15`, status: "pendente", received_at: null, commitment_note: "NE 2026/1204" },
-  { id: "rc-3", contract_id: "ct-1", reference_period: `${y}-${String(m).padStart(2, "0")}`, expected_amount: 40500, expected_date: `${y}-${String(m).padStart(2, "0")}-28`, status: "pendente", received_at: null, commitment_note: null },
-  { id: "rc-4", contract_id: "ct-2", reference_period: `${y}-${String(m).padStart(2, "0")}`, expected_amount: 17700, expected_date: `${y}-${String(m).padStart(2, "0")}-30`, status: "pendente", received_at: null, commitment_note: null },
+  { id: "rc-1", service_order_id: null, contract_id: "ct-1", reference_period: `${prevY}-${String(prevM).padStart(2, "0")}`, expected_amount: 40500, expected_date: `${y}-${String(m).padStart(2, "0")}-10`, status: "recebido", received_at: `${y}-${String(m).padStart(2, "0")}-11`, commitment_note: "NE 2026/1187" },
+  { id: "rc-2", service_order_id: null, contract_id: "ct-2", reference_period: `${prevY}-${String(prevM).padStart(2, "0")}`, expected_amount: 17700, expected_date: `${y}-${String(m).padStart(2, "0")}-15`, status: "pendente", received_at: null, commitment_note: "NE 2026/1204" },
+  { id: "rc-3", service_order_id: null, contract_id: "ct-1", reference_period: `${y}-${String(m).padStart(2, "0")}`, expected_amount: 40500, expected_date: `${y}-${String(m).padStart(2, "0")}-28`, status: "pendente", received_at: null, commitment_note: null },
+  { id: "rc-4", service_order_id: null, contract_id: "ct-2", reference_period: `${y}-${String(m).padStart(2, "0")}`, expected_amount: 17700, expected_date: `${y}-${String(m).padStart(2, "0")}-30`, status: "pendente", received_at: null, commitment_note: null },
 ];
 
 export const payables: Payable[] = [
