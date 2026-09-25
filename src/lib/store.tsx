@@ -17,7 +17,7 @@ interface Store {
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
   addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
-  updateServiceOrder:(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>Promise<void>;
+  updateServiceOrder:(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;location:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>Promise<void>;
   deleteServiceOrder:(id:string)=>Promise<void>;
   finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>Promise<void>;
 }
@@ -242,7 +242,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    const total=items.reduce((s,x)=>s+x.amount,0);
    const {data:userData}=await supabase.auth.getUser();
    const {data,error}=await supabase.from("service_orders").insert({
-     service_date:input.service_date,service_type_id:first.type.id,contract_id:input.contract_id||null,team_id:team.id,
+     service_date:input.service_date,service_type_id:first.type.id,contract_id:input.contract_id||null,team_id:team.id,location:input.location||null,
      planned_quantity:first.quantity,unit_price:first.type.unit_price,planned_amount:total,
      realized_quantity:null,realized_amount:0,status:"aberta",notes:input.notes||null,created_by:userData.user?.id||null
    }).select("*, service_type:service_types(*), contract:contracts(*), team:teams(*)").single();
@@ -260,7 +260,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    const order=serviceOrders.find(o=>o.id===id);
    const {error}=await supabase.rpc("update_service_order",{
      p_service_order_id:id,p_service_date:input.service_date,p_contract_id:input.contract_id||null,
-     p_team_id:input.team_id,p_notes:input.notes||null,
+     p_team_id:input.team_id,p_notes:input.notes||null,p_location:input.location||null,
      p_items:(input.services||[]).map((x,index)=>order?.status==="realizada"
        ? {item_id:(order.items||[])[index]?.id,realized_quantity:Number(x.realized_quantity ?? x.planned_quantity)}
        : {service_type_id:x.service_type_id,planned_quantity:Number(x.planned_quantity)}),
