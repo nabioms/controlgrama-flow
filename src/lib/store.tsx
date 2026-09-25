@@ -16,7 +16,7 @@ interface Store {
   addTeam:(name:string,foremanWorkerId:string|null)=>Promise<void>; updateTeam:(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"active">>)=>Promise<void>; setTeamMembers:(teamId:string,workerIds:string[])=>Promise<void>;
   addServiceType:(name:string,unit:ServiceType["unit"],unitPrice:number)=>Promise<void>;
   updateServiceType:(id:string,patch:Partial<Pick<ServiceType,"name"|"unit"|"unit_price"|"active">>)=>Promise<void>;
-  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
+  addServiceOrder:(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;location?:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>Promise<void>;
   updateServiceOrder:(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;location:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>Promise<void>;
   deleteServiceOrder:(id:string)=>Promise<void>;
   finalizeServiceOrder:(id:string,status:Exclude<ServiceOrderStatus,"aberta">,realizedQuantities?:{item_id:string;quantity:number}[])=>Promise<void>;
@@ -229,7 +229,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    const {data,error}=await supabase.from("service_types").update(patch).eq("id",id).select("*").single();
    if(error)throw error; setServiceTypes(x=>x.map(s=>s.id===id?data as ServiceType:s));
  },[]);
- const addServiceOrder=useCallback(async(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>{
+ const addServiceOrder=useCallback(async(input:{service_date:string;service_type_id:string;contract_id:string|null;team_id:string;planned_quantity:number;notes:string|null;location?:string|null;services?:{service_type_id:string;planned_quantity:number}[]})=>{
    const team=teams.find(t=>t.id===input.team_id); if(!team||!team.active)throw new Error("Selecione uma equipe ativa.");
    if(!team.foreman_worker_id)throw new Error("A equipe precisa ter um encarregado definido.");
    const memberIds=(team.members||[]).filter(w=>w.status!=="desligado").map(w=>w.id); if(!memberIds.length)throw new Error("A equipe precisa ter pelo menos um integrante.");
@@ -256,7 +256,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    if(teamError){await supabase.from("service_order_items").delete().eq("service_order_id",data.id);await supabase.from("service_orders").delete().eq("id",data.id);throw teamError;}
    await refresh();
  },[serviceTypes,teams]);
- const updateServiceOrder=useCallback(async(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>{
+ const updateServiceOrder=useCallback(async(id:string,input:{service_date:string;contract_id:string|null;team_id:string;notes:string|null;location?:string|null;services?:{service_type_id:string;planned_quantity:number;realized_quantity?:number}[]})=>{
    const order=serviceOrders.find(o=>o.id===id);
    const {error}=await supabase.rpc("update_service_order",{
      p_service_order_id:id,p_service_date:input.service_date,p_contract_id:input.contract_id||null,
