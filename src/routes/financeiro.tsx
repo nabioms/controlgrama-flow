@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Plus } from "lucide-react";
+import { Plus, Trash2, WalletCards } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, SectionTitle, Select, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -34,11 +34,15 @@ export const Route = createFileRoute("/financeiro")({
   component: FinanceiroPage,
 });
 
-const tabs = ["Resumo", "Receber", "Pagar", "Notas"] as const;
+const tabs = ["Resumo", "Receber", "Pagar", "Ajuda de custo", "Notas"] as const;
 
 function FinanceiroPage() {
-  const { receivables, payables, payments, workers, attendance, markReceived, markPayablePaid, addPayable, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
+  const { receivables, payables, payments, dailyAllowances, workers, attendance, markReceived, markPayablePaid, addPayable, addDailyAllowance, deleteDailyAllowance, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
   const [tab, setTab] = useState<(typeof tabs)[number]>("Resumo");
+  const [allowanceDate, setAllowanceDate] = useState(toISO(new Date()));
+  const [allowanceAmount, setAllowanceAmount] = useState("20");
+  const [allowanceMethod, setAllowanceMethod] = useState<"pix" | "dinheiro" | "transferencia">("dinheiro");
+  const [selectedAllowanceWorkers, setSelectedAllowanceWorkers] = useState<string[]>([]);
   const [form, setForm] = useState({
     description: "",
     amount: "",
@@ -48,6 +52,14 @@ function FinanceiroPage() {
   });
 
   const month = toISO(new Date()).slice(0, 7);
+  const presentDiaristas = workers.filter((w) => w.status === "ativo" && w.employment_type === "diarista" && attendance.some((a) => a.worker_id === w.id && a.date === allowanceDate && a.status === "presente"));
+  const paidAllowanceIds = new Set(dailyAllowances.filter((a) => a.date === allowanceDate).map((a) => a.worker_id));
+  const monthAllowanceTotal = dailyAllowances.filter((a) => a.date.startsWith(month)).reduce((s, a) => s + Number(a.amount || 0), 0);
+  const dayAllowanceTotal = dailyAllowances.filter((a) => a.date === allowanceDate).reduce((s, a) => s + Number(a.amount || 0), 0);
+  const unpaidPresentDiaristas = presentDiaristas.filter((w) => !paidAllowanceIds.has(w.id));
+  useEffect(() => {
+    setSelectedAllowanceWorkers(unpaidPresentDiaristas.map((w) => w.id));
+  }, [allowanceDate, dailyAllowances.length, attendance.length, workers.length]);
   const toReceive = receivables.filter((r) => r.status === "pendente");
   const toPay = payables.filter((p) => p.status === "pendente");
   const monthIn = receivables
@@ -97,6 +109,24 @@ function FinanceiroPage() {
     const cost = payables.filter((p) => p.contract_id === c.id).reduce((s, p) => s + p.amount, 0);
     return { contract: c, revenue, cost, result: revenue - cost };
   });
+
+  const registerAllowances = async () => {
+    const ids = selectedAllowanceWorkers.filter((id) => !paidAllowanceIds.has(id));
+    if (!ids.length) return;
+    const amount = Number(allowanceAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      window.alert("Informe um valor válido para a ajuda de custo.");
+      return;
+    }
+    try {
+      for (const workerId of ids) {
+        await addDailyAllowance({ worker_id: workerId, date: allowanceDate, amount, method: allowanceMethod });
+      }
+      setSelectedAllowanceWorkers([]);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Não foi possível registrar a ajuda de custo.");
+    }
+  };
 
   const submit = () => {
     if (!form.description || !form.amount) return;
@@ -295,6 +325,84 @@ function FinanceiroPage() {
                     Marcar como paga
                   </Button>
                 ) : null}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {tab === "Ajuda de custo" ? (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-2.5">
+            <StatCard label="Hoje" value={brl(dayAllowanceTotal)} sub={`${dailyAllowances.filter((a) => a.date === allowanceDate).length} pagos`} tone="success" icon={<WalletCards className="size-4" />} />
+            <StatCard label="No mês" value={brl(monthAllowanceTotal)} sub="Ajuda de custo paga" tone="info" icon={<WalletCards className="size-4" />} />
+          </div>
+
+          <Card className="mb-4 space-y-3">
+            <SectionTitle title="Registrar ajuda de custo" hint="Separada do pagamento das diárias" />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Data">
+                <Input type="date" value={allowanceDate} onChange={(e) => setAllowanceDate(e.target.value)} />
+              </Field>
+              <Field label="Valor por diarista (R$)">
+                <Input type="number" min="0.01" step="0.01" value={allowanceAmount} onChange={(e) => setAllowanceAmount(e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Forma de pagamento">
+              <Select value={allowanceMethod} onChange={(e) => setAllowanceMethod(e.target.value as typeof allowanceMethod)}>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="pix">PIX</option>
+                <option value="transferencia">Transferência</option>
+              </Select>
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              O valor padrão é R$ 20,00. Este lançamento não altera nem antecipa a diária do 5º dia útil.
+            </p>
+            <Button className="w-full" onClick={registerAllowances} disabled={!selectedAllowanceWorkers.length}>
+              <WalletCards className="size-4" /> Registrar para os selecionados ({selectedAllowanceWorkers.length})
+            </Button>
+          </Card>
+
+          <SectionTitle title="Diaristas presentes" hint={`${unpaidPresentDiaristas.length} ainda sem ajuda registrada em ${formatDate(allowanceDate)}`} />
+          <div className="mb-5 space-y-2">
+            {presentDiaristas.length === 0 ? <EmptyState text="Nenhum diarista com presença registrada nesta data." /> : null}
+            {presentDiaristas.map((w) => {
+              const paid = paidAllowanceIds.has(w.id);
+              return (
+                <div key={w.id} className="card-surface flex items-center gap-3 p-3">
+                  {!paid ? (
+                    <input
+                      type="checkbox"
+                      checked={selectedAllowanceWorkers.includes(w.id)}
+                      onChange={(e) => setSelectedAllowanceWorkers((current) => e.target.checked ? [...new Set([...current, w.id])] : current.filter((id) => id !== w.id))}
+                      className="size-4 accent-primary"
+                    />
+                  ) : <span className="size-4" />}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold">{w.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{paid ? "Ajuda de custo registrada" : "Presença confirmada"}</p>
+                  </div>
+                  {paid ? <Badge tone="success">Pago</Badge> : <span className="text-sm font-semibold">{brl(Number(allowanceAmount || 20))}</span>}
+                </div>
+              );
+            })}
+          </div>
+
+          <SectionTitle title="Últimos pagamentos" hint="Histórico da ajuda de custo" />
+          <div className="space-y-2">
+            {dailyAllowances.slice(0, 20).map((a) => (
+              <div key={a.id} className="card-surface flex items-center gap-3 p-3">
+                <WalletCards className="size-4 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{workers.find((w) => w.id === a.worker_id)?.full_name ?? "Diarista"}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(a.date)} · {a.method === "dinheiro" ? "Dinheiro" : a.method === "pix" ? "PIX" : "Transferência"}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold">{brl(Number(a.amount))}</p>
+                  <button type="button" aria-label="Excluir registro" className="mt-1 inline-flex items-center gap-1 text-[11px] text-destructive" onClick={() => deleteDailyAllowance(a.id)}>
+                    <Trash2 className="size-3" /> Excluir
+                  </button>
+                </div>
               </div>
             ))}
           </div>
