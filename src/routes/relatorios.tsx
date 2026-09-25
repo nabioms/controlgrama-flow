@@ -1,11 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, Field, Input, SectionTitle, Select } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
 
 import { brl, formatDate, toISO } from "@/lib/format";
+
+type StockItem = { id: string; name: string; category: string; unit: string; min_quantity: number; created_at: string };
+type StockMovement = { id: string; item_id: string; kind: "entrada" | "saida" | "retirada" | "devolucao"; quantity: number; date: string; person: string | null; notes: string | null; loan_id: string | null };
 
 export const Route = createFileRoute("/relatorios")({
   head: () => ({
@@ -39,6 +42,28 @@ function RelatoriosPage() {
   const [from, setFrom] = useState(today.slice(0, 8) + "01");
   const [to, setTo] = useState(today);
   const [contractId, setContractId] = useState("");
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [stockMoves, setStockMoves] = useState<StockMovement[]>([]);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("controlgrama-estoque-v1");
+      if (raw) {
+        const data = JSON.parse(raw);
+        setStockItems(data.items ?? []);
+        setStockMoves(data.moves ?? []);
+      }
+    } catch { /* ignora dados inválidos */ }
+  }, []);
+
+  const stockBalance = useMemo(() => {
+    const map = new Map<string, number>();
+    stockMoves.forEach((m) => {
+      const sign = m.kind === "entrada" || m.kind === "devolucao" ? 1 : -1;
+      map.set(m.item_id, (map.get(m.item_id) ?? 0) + sign * Number(m.quantity));
+    });
+    return map;
+  }, [stockMoves]);
 
   const inRange = (d: string) => d >= from && d <= to;
 
@@ -94,6 +119,19 @@ function RelatoriosPage() {
     return rows;
   };
 
+  const estoqueRows = () => {
+    const rows: (string | number)[][] = [["Item", "Categoria", "Unidade", "Quantidade atual", "Estoque mínimo", "Situação"]];
+    stockItems
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+      .forEach((item) => {
+        const quantity = stockBalance.get(item.id) ?? 0;
+        rows.push([item.name, item.category, item.unit, quantity, item.min_quantity, quantity <= item.min_quantity ? "Estoque baixo" : "Normal"]);
+      });
+    rows.push(["", "", "", stockItems.reduce((s, item) => s + (stockBalance.get(item.id) ?? 0), 0), "", "TOTAL"]);
+    return rows;
+  };
+
   const financeiroRows = () => {
     const rows: (string | number)[][] = [["Tipo", "Descrição", "Categoria/Contrato", "Data", "Valor", "Status"]];
     receivables.filter((r) => inRange(r.expected_date)).forEach((r) =>
@@ -134,6 +172,7 @@ function RelatoriosPage() {
     { key: "folha-de-ponto", title: "Folha de ponto mensal", hint: "Presenças, faltas e justificativas por trabalhador", build: pontoRows },
     { key: "pagamentos-diarias", title: "Pagamentos de diárias", hint: "Por período, com forma de pagamento", build: diariasRows },
     { key: "ajuda-de-custo", title: "Ajuda de custo dos diaristas", hint: "Pagamentos diários separados das diárias do 5º dia útil", build: ajudaCustoRows },
+    { key: "estoque", title: "Relatório de estoque", hint: "Itens, quantidade atual, estoque mínimo e situação", build: estoqueRows },
     { key: "financeiro", title: "Receitas x despesas", hint: "Todas as movimentações do período", build: financeiroRows },
     { key: "por-contrato", title: "Relatório por contrato", hint: "Rentabilidade por frente de serviço", build: contractRows },
   ];
