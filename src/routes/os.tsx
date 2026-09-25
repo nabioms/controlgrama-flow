@@ -31,6 +31,7 @@ function ServiceOrdersPage() {
   const [teamId, setTeamId] = useState("");
   const [services, setServices] = useState<DraftService[]>([{ service_type_id: "", planned_quantity: "" }]);
   const [notes, setNotes] = useState("");
+  const [location, setLocation] = useState("");
   const [showTypes, setShowTypes] = useState(false);
   const [typeName, setTypeName] = useState("");
   const [typeUnit, setTypeUnit] = useState<ServiceUnit>("m2");
@@ -48,6 +49,7 @@ function ServiceOrdersPage() {
   const [editContractId, setEditContractId] = useState("");
   const [editTeamId, setEditTeamId] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editLocation, setEditLocation] = useState("");
   const [editServices, setEditServices] = useState<DraftService[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -105,10 +107,12 @@ function ServiceOrdersPage() {
         planned_quantity: valid[0].planned_quantity,
         services: valid.map((s, index) => ({ ...s, realized_quantity: undefined })),
         notes: notes || null,
+        location: location || null,
       });
 
       setServices([{ service_type_id: "", planned_quantity: "" }]);
       setNotes("");
+      setLocation("");
       setTeamId("");
       setContractId("");
     } catch (e: any) {
@@ -147,6 +151,7 @@ function ServiceOrdersPage() {
     setEditContractId(order.contract_id || "");
     setEditTeamId(order.team_id || "");
     setEditNotes(order.notes || "");
+    setEditLocation(order.location || "");
     setEditServices(items.length
       ? items.map((item) => ({ service_type_id: item.service_type_id, planned_quantity: String(order.status === "realizada" ? (item.realized_quantity ?? item.planned_quantity) : item.planned_quantity), item_id: item.id }))
       : [{ service_type_id: order.service_type_id, planned_quantity: String(order.planned_quantity) }]);
@@ -172,6 +177,7 @@ function ServiceOrdersPage() {
         contract_id: editContractId || null,
         team_id: editTeamId,
         notes: editNotes || null,
+        location: editLocation || null,
         services: valid,
       });
       setEditing(null);
@@ -277,7 +283,7 @@ function ServiceOrdersPage() {
           </div>
         </div>
 
-        <label className="mt-3 block text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Frente, local ou observação da execução..." /></label>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Local da roçada<input className="input mt-1" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ex.: Rua das Palmeiras, nº 250 — canteiro central" /></label><label className="text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Frente, referência ou observação da execução..." /></label></div>
         {error && <p className="mt-2 text-xs font-semibold text-destructive">{error}</p>}
         <Button className="mt-3 w-full" disabled={saving || !teamId || !services.some((s) => s.service_type_id && parseQuantity(s.planned_quantity) > 0)} onClick={createOrder}><Plus className="size-4" /> Abrir O.S. com {services.filter((s) => s.service_type_id && Number(s.planned_quantity) > 0).length || 0} serviço(s)</Button>
       </Card>
@@ -324,7 +330,8 @@ function ServiceOrdersPage() {
                   <p className="text-sm font-semibold">O.S. #{o.order_number} · {items.length ? `${items.length} serviço(s)` : o.service_type?.name}</p>
                   <p className="text-xs text-muted-foreground">{formatDate(o.service_date)} · equipe {team?.name || "não informada"}</p>
                   {items.length ? <div className="mt-2 space-y-1">{items.map((item) => <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-2 py-1.5 text-xs"><span>{item.service_type?.name || serviceTypes.find((t) => t.id === item.service_type_id)?.name || "Serviço"} · {Number(item.planned_quantity).toLocaleString("pt-BR")} {item.service_type ? unitLabel[item.service_type.unit] : ""}</span><strong>{brl(Number(item.planned_amount))}</strong></div>)}</div> : <p className="text-xs text-muted-foreground">Serviço legado · {Number(o.planned_quantity).toLocaleString("pt-BR")} × {brl(Number(o.unit_price))}</p>}
-                  {o.notes && <p className="mt-1 text-xs text-muted-foreground">{o.notes}</p>}
+                  {o.location && <p className="mt-2 text-xs"><span className="font-semibold">Local:</span> {o.location}</p>}
+                   {o.notes && <p className="mt-1 text-xs text-muted-foreground">{o.notes}</p>}
                 </div>
                 <Badge tone={o.status === "realizada" ? "success" : o.status === "nao_realizada" ? "danger" : "warning"}>{o.status === "realizada" ? "REALIZADA" : o.status === "nao_realizada" ? "NÃO REALIZADA" : "ABERTA"}</Badge>
               </div>
@@ -407,7 +414,7 @@ function ServiceOrdersPage() {
                     </div>
                   </div>
 
-                  <label className="mt-3 block text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} /></label>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-semibold">Local da roçada<input className="input mt-1" value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="Ex.: Rua das Palmeiras, nº 250 — canteiro central" /></label><label className="text-xs font-semibold">Observação<textarea className="input mt-1 min-h-20" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} /></label></div>
                   {error && <p className="mt-2 text-xs font-semibold text-destructive">{error}</p>}
                   <div className="mt-4 grid grid-cols-2 gap-2"><Button disabled={editSaving || !editTeamId} onClick={saveEdit}>{editSaving ? "Salvando..." : "Salvar alterações"}</Button><Button variant="outline" onClick={() => setEditing(null)}>Cancelar</Button></div>
                 </>
