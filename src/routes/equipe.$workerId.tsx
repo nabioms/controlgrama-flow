@@ -33,6 +33,8 @@ function WorkerDetail() {
   const worker = workers.find((w) => w.id === workerId);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [editError, setEditError] = useState("");
   const [editForm, setEditForm] = useState({
     full_name: "",
