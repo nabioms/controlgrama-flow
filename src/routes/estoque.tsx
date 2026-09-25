@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Package, Pencil, RotateCcw, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowDownToLine, ArrowUpFromLine, Boxes, Package, Pencil, RotateCcw, Trash2, UserRound, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, SectionTitle, Select, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -198,20 +198,30 @@ function EstoquePage() {
           </Card>
 
           {showItemForm && (
-            <Card className="mb-4 border-primary/30">
-              <SectionTitle title={editingItemId ? "Editar item" : "Novo item"} />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Nome"><Input autoFocus value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Ex.: Roçadeira, fio de nylon" /></Field>
-                <Field label="Categoria"><Select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
-                <Field label="Unidade"><Select value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
-                <Field label="Estoque mínimo"><Input type="number" min={0} value={itemForm.min_quantity} onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })} /></Field>
-                {!editingItemId && <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>}
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="item-dialog-title">
+              <div className="w-full max-w-lg rounded-2xl bg-card p-5 shadow-2xl">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h2 id="item-dialog-title" className="text-lg font-bold">{editingItemId ? "Editar item" : "Novo item"}</h2>
+                    <p className="text-xs text-muted-foreground">{editingItemId ? "Atualize os dados do produto." : "Cadastre um novo produto no estoque."}</p>
+                  </div>
+                  <button type="button" aria-label="Fechar" onClick={resetItemForm} className="rounded-lg p-2 text-muted-foreground hover:bg-muted">
+                    <X className="size-5" />
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Nome"><Input autoFocus value={itemForm.name} onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })} placeholder="Ex.: Roçadeira, fio de nylon" /></Field>
+                  <Field label="Categoria"><Select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
+                  <Field label="Unidade"><Select value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
+                  <Field label="Estoque mínimo"><Input type="number" min={0} value={itemForm.min_quantity} onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })} /></Field>
+                  {!editingItemId && <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>}
+                </div>
+                <div className="mt-5 flex gap-2">
+                  <Button className="w-full" onClick={addItem}>{editingItemId ? "Salvar alterações" : "Adicionar item"}</Button>
+                  <Button variant="soft" onClick={resetItemForm}>Cancelar</Button>
+                </div>
               </div>
-              <div className="mt-3 flex gap-2">
-                <Button className="w-full" onClick={addItem}>{editingItemId ? "Salvar alterações" : "Adicionar item"}</Button>
-                <Button variant="soft" onClick={resetItemForm}>Cancelar</Button>
-              </div>
-            </Card>
+            </div>
           )}
 
           <div className="space-y-2">
