@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as DiariasRouteImport } from './routes/diarias'
 import { Route as EquipeRouteImport } from './routes/equipe'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
+import { Route as OsRouteImport } from './routes/os'
 import { Route as PontoRouteImport } from './routes/ponto'
 import { Route as RelatoriosRouteImport } from './routes/relatorios'
 import { Route as EquipeWorkerIdRouteImport } from './routes/equipe.$workerId'
@@ -37,6 +38,11 @@ const FinanceiroRoute = FinanceiroRouteImport.update({
   path: '/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OsRoute = OsRouteImport.update({
+  id: '/os',
+  path: '/os',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PontoRoute = PontoRouteImport.update({
   id: '/ponto',
   path: '/ponto',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/diarias': typeof DiariasRoute
   '/equipe': typeof EquipeRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
+  '/os': typeof OsRoute
   '/ponto': typeof PontoRoute
   '/relatorios': typeof RelatoriosRoute
   '/equipe/$workerId': typeof EquipeWorkerIdRoute
@@ -67,6 +74,7 @@ export interface FileRoutesByTo {
   '/diarias': typeof DiariasRoute
   '/equipe': typeof EquipeRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
+  '/os': typeof OsRoute
   '/ponto': typeof PontoRoute
   '/relatorios': typeof RelatoriosRoute
   '/equipe/$workerId': typeof EquipeWorkerIdRoute
@@ -77,6 +85,7 @@ export interface FileRoutesById {
   '/diarias': typeof DiariasRoute
   '/equipe': typeof EquipeRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
+  '/os': typeof OsRoute
   '/ponto': typeof PontoRoute
   '/relatorios': typeof RelatoriosRoute
   '/equipe/$workerId': typeof EquipeWorkerIdRoute
@@ -88,6 +97,7 @@ export interface FileRouteTypes {
     | '/diarias'
     | '/equipe'
     | '/financeiro'
+    | '/os'
     | '/ponto'
     | '/relatorios'
     | '/equipe/$workerId'
@@ -97,6 +107,7 @@ export interface FileRouteTypes {
     | '/diarias'
     | '/equipe'
     | '/financeiro'
+    | '/os'
     | '/ponto'
     | '/relatorios'
     | '/equipe/$workerId'
@@ -106,6 +117,7 @@ export interface FileRouteTypes {
     | '/diarias'
     | '/equipe'
     | '/financeiro'
+    | '/os'
     | '/ponto'
     | '/relatorios'
     | '/equipe/$workerId'
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   DiariasRoute: typeof DiariasRoute
   EquipeRoute: typeof EquipeRouteWithChildren
   FinanceiroRoute: typeof FinanceiroRoute
+  OsRoute: typeof OsRoute
   PontoRoute: typeof PontoRoute
   RelatoriosRoute: typeof RelatoriosRoute
 }
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/financeiro'
       fullPath: '/financeiro'
       preLoaderRoute: typeof FinanceiroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/os': {
+      id: '/os'
+      path: '/os'
+      fullPath: '/os'
+      preLoaderRoute: typeof OsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ponto': {
@@ -190,6 +210,7 @@ const rootRouteChildren: RootRouteChildren = {
   DiariasRoute: DiariasRoute,
   EquipeRoute: EquipeRouteWithChildren,
   FinanceiroRoute: FinanceiroRoute,
+  OsRoute: OsRoute,
   PontoRoute: PontoRoute,
   RelatoriosRoute: RelatoriosRoute,
 }
