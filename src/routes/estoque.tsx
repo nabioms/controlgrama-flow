@@ -23,7 +23,7 @@ type StockItem = { id: string; name: string; category: string; unit: string; min
 type MovementKind = "entrada" | "saida" | "retirada" | "devolucao";
 type StockMovement = {
   id: string; item_id: string; kind: MovementKind; quantity: number; date: string;
-  person: string | null; notes: string | null; loan_id: string | null; // devolução aponta para a retirada
+  person: string | null; person_worker_id?: string | null; notes: string | null; loan_id: string | null; // devolução aponta para a retirada
 };
 
 const KEY = "controlgrama-estoque-v1";
@@ -118,7 +118,7 @@ function EstoquePage() {
   }
 
   // Formulário de movimentação
-  const [mv, setMv] = useState({ item_id: "", kind: "entrada" as MovementKind, quantity: "1", date: toISO(new Date()), person: "", notes: "" });
+  const [mv, setMv] = useState({ item_id: "", kind: "entrada" as MovementKind, quantity: "1", date: toISO(new Date()), person: "", person_worker_id: "", notes: "" });
   const [mvError, setMvError] = useState("");
   function addMove() {
     setMvError("");
@@ -126,19 +126,20 @@ function EstoquePage() {
     if (!mv.item_id) return setMvError("Escolha um item.");
     if (!(qty > 0)) return setMvError("Informe uma quantidade maior que zero.");
     if ((mv.kind === "saida" || mv.kind === "retirada") && qty > (balance.get(mv.item_id) ?? 0)) return setMvError("Quantidade maior que o saldo disponível.");
-    if (mv.kind === "retirada" && !mv.person.trim()) return setMvError("Informe quem pegou.");
-    setMoves((p) => [...p, { id: uid(), item_id: mv.item_id, kind: mv.kind, quantity: qty, date: mv.date, person: mv.person.trim() || null, notes: mv.notes.trim() || null, loan_id: null }]);
-    setMv({ ...mv, quantity: "1", person: "", notes: "" });
+    if (mv.kind === "retirada" && !mv.person_worker_id) return setMvError("Selecione o funcionário ou diarista que pegou o item.");
+    const selectedWorker = workers.find((w) => w.id === mv.person_worker_id);
+    setMoves((p) => [...p, { id: uid(), item_id: mv.item_id, kind: mv.kind, quantity: qty, date: mv.date, person: selectedWorker?.full_name || mv.person.trim() || null, person_worker_id: selectedWorker?.id || null, notes: mv.notes.trim() || null, loan_id: null }]);
+    setMv({ ...mv, quantity: "1", person: "", person_worker_id: "", notes: "" });
   }
   function giveBack(loanId: string, pending: number) {
     const input = prompt("Quantidade devolvida:", String(pending));
     const qty = Number(input);
     if (!input || !(qty > 0) || qty > pending) return;
     const loan = moves.find((m) => m.id === loanId)!;
-    setMoves((p) => [...p, { id: uid(), item_id: loan.item_id, kind: "devolucao", quantity: qty, date: toISO(new Date()), person: loan.person, notes: null, loan_id: loanId }]);
+    setMoves((p) => [...p, { id: uid(), item_id: loan.item_id, kind: "devolucao", quantity: qty, date: toISO(new Date()), person: loan.person, person_worker_id: loan.person_worker_id || null, notes: null, loan_id: loanId }]);
   }
 
-  const people = workers.filter((w) => w.status === "ativo").map((w) => w.full_name);
+  const people = workers.filter((w) => w.status === "ativo");
   const filtered = items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()) || i.category.toLowerCase().includes(search.toLowerCase()));
   const tabs = [
     ["itens", "Itens"], ["movimentar", "Movimentar"], ["emprestimos", `Com pessoas (${openLoans.length})`], ["historico", "Histórico"],
@@ -211,9 +212,18 @@ function EstoquePage() {
               <Field label="Item"><Select value={mv.item_id} onChange={(e) => setMv({ ...mv, item_id: e.target.value })}><option value="">Selecione…</option>{items.map((i) => <option key={i.id} value={i.id}>{i.name} (saldo {balance.get(i.id) ?? 0} {i.unit})</option>)}</Select></Field>
               <Field label="Quantidade"><Input type="number" min={0} step="any" value={mv.quantity} onChange={(e) => setMv({ ...mv, quantity: e.target.value })} /></Field>
               <Field label="Data"><Input type="date" value={mv.date} onChange={(e) => setMv({ ...mv, date: e.target.value })} /></Field>
-              <Field label={mv.kind === "entrada" ? "Fornecedor / quem entregou" : "Quem pegou"}>
-                <Input list="estoque-pessoas" value={mv.person} onChange={(e) => setMv({ ...mv, person: e.target.value })} placeholder="Nome" />
-                <datalist id="estoque-pessoas">{people.map((p) => <option key={p} value={p} />)}</datalist>
+              <Field label={mv.kind === "entrada" ? "Fornecedor / quem entregou" : "Funcionário / diarista"}>
+                {mv.kind === "entrada" ? (
+                  <Input value={mv.person} onChange={(e) => setMv({ ...mv, person: e.target.value })} placeholder="Nome do fornecedor ou responsável" />
+                ) : (
+                  <Select value={mv.person_worker_id} onChange={(e) => {
+                    const worker = people.find((w) => w.id === e.target.value);
+                    setMv({ ...mv, person_worker_id: e.target.value, person: worker?.full_name || "" });
+                  }}>
+                    <option value="">Selecione o funcionário/diarista…</option>
+                    {people.map((w) => <option key={w.id} value={w.id}>{w.full_name} — {w.employment_type === "diarista" ? "Diarista" : "Funcionário"}{w.job_role ? ` · ${w.job_role}` : ""}</option>)}
+                  </Select>
+                )}
               </Field>
               <Field label="Observação"><Input value={mv.notes} onChange={(e) => setMv({ ...mv, notes: e.target.value })} placeholder="Frente de serviço, motivo…" /></Field>
             </div>
