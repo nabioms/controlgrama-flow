@@ -162,12 +162,63 @@ function EstoquePage() {
     setItemForm({ name: "", category: CATEGORIES[0]!, unit: "un", min_quantity: "0", initial: "0" });
   }
 
-  function addItem() {
+  async function addItem() {
     if (!itemForm.name.trim()) return;
     if (editingItemId) {
-      const patch = { name: itemForm.name.trim(), category: itemForm.category, unit: itemForm.unit, min_quantity: Number(itemForm.min_quantity) || 0 };
+      const initial = Number(itemForm.initial) || 0;
+      const patch = {
+        name: itemForm.name.trim(),
+        category: itemForm.category,
+        unit: itemForm.unit,
+        min_quantity: Number(itemForm.min_quantity) || 0,
+      };
+
+      // A quantidade inicial é registrada como uma movimentação própria.
+      // Ao editar, ajustamos essa movimentação em vez de criar uma nova,
+      // evitando duplicar o estoque inicial no saldo.
+      const initialMove = moves.find((m) => m.item_id === editingItemId && m.kind === "entrada" && m.notes === "Estoque inicial");
+
       setItems((p) => p.map((item) => item.id === editingItemId ? { ...item, ...patch } : item));
-      if (userId) void supabase.from("stock_items").update(patch).eq("id", editingItemId);
+
+      if (initial > 0) {
+        if (initialMove) {
+          const updatedMove = { ...initialMove, quantity: initial };
+          setMoves((p) => p.map((m) => m.id === initialMove.id ? updatedMove : m));
+          if (userId) {
+            const { error } = await supabase.from("stock_movements").update({ quantity: initial }).eq("id", initialMove.id);
+            if (error) console.error("Falha ao atualizar estoque inicial:", error);
+          }
+        } else {
+          const newInitialMove: StockMovement = {
+            id: uid(),
+            item_id: editingItemId,
+            kind: "entrada",
+            quantity: initial,
+            date: toISO(new Date()),
+            person: null,
+            person_worker_id: null,
+            notes: "Estoque inicial",
+            loan_id: null,
+          };
+          setMoves((p) => [...p, newInitialMove]);
+          if (userId) {
+            const { error } = await supabase.from("stock_movements").insert({ ...newInitialMove, user_id: userId });
+            if (error) console.error("Falha ao criar estoque inicial:", error);
+          }
+        }
+      } else if (initialMove) {
+        setMoves((p) => p.filter((m) => m.id !== initialMove.id));
+        if (userId) {
+          const { error } = await supabase.from("stock_movements").delete().eq("id", initialMove.id);
+          if (error) console.error("Falha ao remover estoque inicial:", error);
+        }
+      }
+
+      if (userId) {
+        const { error } = await supabase.from("stock_items").update(patch).eq("id", editingItemId);
+        if (error) console.error("Falha ao atualizar item:", error);
+      }
+
       resetItemForm();
       return;
     }
@@ -185,6 +236,7 @@ function EstoquePage() {
   }
 
   function editItem(item: StockItem) {
+    const initialMove = moves.find((m) => m.item_id === item.id && m.kind === "entrada" && m.notes === "Estoque inicial");
     setEditingItemId(item.id);
     setShowItemForm(true);
     setItemForm({
@@ -192,7 +244,7 @@ function EstoquePage() {
       category: item.category,
       unit: item.unit,
       min_quantity: String(item.min_quantity),
-      initial: "0",
+      initial: String(initialMove?.quantity ?? 0),
     });
     setTab("itens");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -301,7 +353,7 @@ function EstoquePage() {
                   <Field label="Categoria"><Select value={itemForm.category} onChange={(e) => setItemForm({ ...itemForm, category: e.target.value })}>{CATEGORIES.map((c) => <option key={c}>{c}</option>)}</Select></Field>
                   <Field label="Unidade"><Select value={itemForm.unit} onChange={(e) => setItemForm({ ...itemForm, unit: e.target.value })}>{UNITS.map((u) => <option key={u}>{u}</option>)}</Select></Field>
                   <Field label="Estoque mínimo"><Input type="number" min={0} value={itemForm.min_quantity} onChange={(e) => setItemForm({ ...itemForm, min_quantity: e.target.value })} /></Field>
-                  {!editingItemId && <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>}
+                  <Field label="Quantidade inicial"><Input type="number" min={0} value={itemForm.initial} onChange={(e) => setItemForm({ ...itemForm, initial: e.target.value })} /></Field>
                 </div>
                 <div className="mt-5 flex gap-2">
                   <Button className="w-full" onClick={addItem}>{editingItemId ? "Salvar alterações" : "Adicionar item"}</Button>
