@@ -52,14 +52,15 @@ function FinanceiroPage() {
   });
 
   const month = toISO(new Date()).slice(0, 7);
-  const presentDiaristas = workers.filter((w) => w.status === "ativo" && w.employment_type === "diarista" && attendance.some((a) => a.worker_id === w.id && a.date === allowanceDate && a.status === "presente"));
+  const allowanceDiaristas = workers.filter((w) => w.status === "ativo" && w.employment_type === "diarista");
   const paidAllowanceIds = new Set(dailyAllowances.filter((a) => a.date === allowanceDate).map((a) => a.worker_id));
   const monthAllowanceTotal = dailyAllowances.filter((a) => a.date.startsWith(month)).reduce((s, a) => s + Number(a.amount || 0), 0);
   const dayAllowanceTotal = dailyAllowances.filter((a) => a.date === allowanceDate).reduce((s, a) => s + Number(a.amount || 0), 0);
-  const unpaidPresentDiaristas = presentDiaristas.filter((w) => !paidAllowanceIds.has(w.id));
+  const unpaidAllowanceDiaristas = allowanceDiaristas.filter((w) => !paidAllowanceIds.has(w.id));
+  const presentAllowanceIds = new Set(attendance.filter((a) => a.date === allowanceDate && a.status === "presente").map((a) => a.worker_id));
   useEffect(() => {
-    setSelectedAllowanceWorkers(unpaidPresentDiaristas.map((w) => w.id));
-  }, [allowanceDate, dailyAllowances.length, attendance.length, workers.length]);
+    setSelectedAllowanceWorkers(unpaidAllowanceDiaristas.map((w) => w.id));
+  }, [allowanceDate, dailyAllowances.length, workers.length]);
   const toReceive = receivables.filter((r) => r.status === "pendente");
   const toPay = payables.filter((p) => p.status === "pendente");
   const monthIn = receivables
@@ -112,7 +113,10 @@ function FinanceiroPage() {
 
   const registerAllowances = async () => {
     const ids = selectedAllowanceWorkers.filter((id) => !paidAllowanceIds.has(id));
-    if (!ids.length) return;
+    if (!ids.length) {
+      window.alert("Selecione pelo menos um diarista para registrar a ajuda de custo.");
+      return;
+    }
     const amount = Number(allowanceAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       window.alert("Informe um valor válido para a ajuda de custo.");
@@ -339,7 +343,7 @@ function FinanceiroPage() {
           </div>
 
           <Card className="mb-4 space-y-3">
-            <SectionTitle title="Registrar ajuda de custo" hint="Separada do pagamento das diárias" />
+            <SectionTitle title="Registrar ajuda de custo" hint="Selecione os diaristas que receberam" />
             <div className="grid grid-cols-2 gap-3">
               <Field label="Data">
                 <Input type="date" value={allowanceDate} onChange={(e) => setAllowanceDate(e.target.value)} />
@@ -356,18 +360,19 @@ function FinanceiroPage() {
               </Select>
             </Field>
             <p className="text-xs text-muted-foreground">
-              O valor padrão é R$ 20,00. Este lançamento não altera nem antecipa a diária do 5º dia útil.
+              O valor padrão é R$ 20,00. Selecione abaixo quem recebeu. O lançamento não altera nem antecipa a diária do 5º dia útil.
             </p>
             <Button className="w-full" onClick={registerAllowances} disabled={!selectedAllowanceWorkers.length}>
-              <WalletCards className="size-4" /> Registrar para os selecionados ({selectedAllowanceWorkers.length})
+              <WalletCards className="size-4" /> Registrar ajuda de custo ({selectedAllowanceWorkers.length})
             </Button>
           </Card>
 
-          <SectionTitle title="Diaristas presentes" hint={`${unpaidPresentDiaristas.length} ainda sem ajuda registrada em ${formatDate(allowanceDate)}`} />
+          <SectionTitle title="Diaristas" hint={`${unpaidAllowanceDiaristas.length} ainda sem ajuda registrada em ${formatDate(allowanceDate)}`} />
           <div className="mb-5 space-y-2">
-            {presentDiaristas.length === 0 ? <EmptyState text="Nenhum diarista com presença registrada nesta data." /> : null}
-            {presentDiaristas.map((w) => {
+            {allowanceDiaristas.length === 0 ? <EmptyState text="Nenhum diarista ativo cadastrado." /> : null}
+            {allowanceDiaristas.map((w) => {
               const paid = paidAllowanceIds.has(w.id);
+              const present = presentAllowanceIds.has(w.id);
               return (
                 <div key={w.id} className="card-surface flex items-center gap-3 p-3">
                   {!paid ? (
@@ -380,7 +385,7 @@ function FinanceiroPage() {
                   ) : <span className="size-4" />}
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">{w.full_name}</p>
-                    <p className="text-xs text-muted-foreground">{paid ? "Ajuda de custo registrada" : "Presença confirmada"}</p>
+                    <p className="text-xs text-muted-foreground">{paid ? "Ajuda de custo registrada" : present ? "Presença registrada" : "Sem presença registrada — selecione se recebeu"}</p>
                   </div>
                   {paid ? <Badge tone="success">Pago</Badge> : <span className="text-sm font-semibold">{brl(Number(allowanceAmount || 20))}</span>}
                 </div>
