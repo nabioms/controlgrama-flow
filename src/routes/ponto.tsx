@@ -31,7 +31,7 @@ const toneFor = (s?: AttendanceStatus) =>
   s === "presente" ? "success" : s === "falta" ? "danger" : s === "atestado" ? "info" : s === "falta_justificada" ? "warning" : "neutral";
 
 function PontoPage() {
-  const { workers, attendance, setAttendanceStatus, deleteAttendance, contracts } = useStore();
+  const { workers, teams, attendance, setAttendanceStatus, deleteAttendance, contracts } = useStore();
   const [date, setDate] = useState("");
 
   useEffect(() => {
