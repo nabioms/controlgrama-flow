@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, FileText, Pencil, RotateCcw, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileText, MessageCircle, Pencil, RotateCcw, Trash2, Upload, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, EmptyState, SectionTitle } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -124,7 +124,14 @@ function WorkerDetail() {
   const docs = workerDocuments.filter((d) => d.worker_id === worker.id);
   const events = workerEvents.filter((e) => e.worker_id === worker.id);
   const history = payments.filter((p) => p.worker_id === worker.id);
-  const workerTeam = teams.find((t) => t.members?.some((m) => m.id === worker.id));
+  const workerTeam = teams.find((t) => t.members?.some((m) => m.id === worker.id));\n  const whatsappUrl = (() => {
+    const digits = (worker.phone || "").replace(/\\D/g, "");
+    if (!digits) return null;
+    const phone = digits.startsWith("55") ? digits : `55${digits}`;
+    return `https://wa.me/${phone}`;
+  })();
+
+
 
   return (
     <AppShell title={worker.full_name} subtitle={worker.job_role}>
@@ -146,7 +153,24 @@ function WorkerDetail() {
         <dl className="mt-3 grid grid-cols-2 gap-y-2 text-xs">
           <div><dt className="text-muted-foreground">CPF</dt><dd className="font-semibold">{worker.cpf || "—"}</dd></div>
           <div><dt className="text-muted-foreground">RG</dt><dd className="font-semibold">{worker.rg || "—"}</dd></div>
-          <div><dt className="text-muted-foreground">Telefone</dt><dd className="font-semibold">{worker.phone || "—"}</dd></div>
+          <div>
+            <dt className="text-muted-foreground">Telefone</dt>
+            <dd className="mt-0.5 flex items-center gap-2 font-semibold">
+              <span>{worker.phone || "—"}</span>
+              {worker.employment_type === "diarista" && whatsappUrl ? (
+                <a
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={`Enviar WhatsApp para ${worker.full_name}`}
+                  title="Enviar mensagem no WhatsApp"
+                  className="inline-flex size-8 items-center justify-center rounded-full bg-[#25D366] text-white transition-opacity hover:opacity-85"
+                >
+                  <MessageCircle className="size-4" />
+                </a>
+              ) : null}
+            </dd>
+          </div>
           <div><dt className="text-muted-foreground">Camisa</dt><dd className="font-semibold">{worker.shirt_size || "—"}</dd></div>
           <div><dt className="text-muted-foreground">Calçado</dt><dd className="font-semibold">{worker.shoe_size || "—"}</dd></div>
           <div><dt className="text-muted-foreground">Equipe</dt><dd className="font-semibold">{workerTeam?.name || "Sem equipe"}</dd></div>
@@ -154,6 +178,16 @@ function WorkerDetail() {
           <div className="col-span-2"><dt className="text-muted-foreground">Endereço</dt><dd className="font-semibold">{worker.address || "—"}</dd></div>
         </dl>
         <div className="mt-3 flex flex-wrap gap-2">
+          {worker.employment_type === "diarista" && whatsappUrl ? (
+            <a
+              href={whatsappUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#25D366] px-3 text-sm font-semibold text-white transition-opacity hover:opacity-85"
+            >
+              <MessageCircle className="size-4" /> WhatsApp
+            </a>
+          ) : null}
           <Button size="sm" variant="outline" onClick={startEditing}>
             <Pencil className="size-3.5" /> Editar cadastro
           </Button>
