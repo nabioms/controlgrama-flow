@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Check, CircleSlash, FileHeart, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, CircleSlash, FileHeart, ShieldCheck, Trash2, Users, ChevronDown, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, Select, SectionTitle, Avatar } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -43,6 +43,7 @@ function PontoPage() {
   const [notes, setNotes] = useState("Frente Zona Norte");
   const [tab, setTab] = useState<"chamada" | "resumo">("chamada");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
 
   const active = workers.filter((w) => w.status !== "desligado");
   const dayRows = useMemo(
@@ -58,6 +59,22 @@ function PontoPage() {
     ).length,
     pendentes: active.filter((w) => !dayRows.get(w.id)).length,
   };
+
+  const groupedTeams = useMemo(() => {
+    const activeIds = new Set(active.map((w) => w.id));
+    const assigned = new Set<string>();
+    const groups = teams
+      .filter((team) => team.active)
+      .map((team) => {
+        const members = (team.members || []).filter((w) => activeIds.has(w.id));
+        members.forEach((w) => assigned.add(w.id));
+        return { id: team.id, name: team.name, members };
+      })
+      .filter((team) => team.members.length > 0);
+    const withoutTeam = active.filter((w) => !assigned.has(w.id));
+    if (withoutTeam.length) groups.push({ id: "__sem_equipe__", name: "Sem equipe", members: withoutTeam });
+    return groups;
+  }, [teams, active]);
 
   const month = date.slice(0, 7);
   const monthly = active.map((w) => {
@@ -129,92 +146,106 @@ function PontoPage() {
             ))}
           </div>
 
-          <div className="space-y-2">
-            {active.map((w) => {
-              const row = dayRows.get(w.id);
-              const current = row?.status;
-              const fraction = Number(row?.work_fraction ?? 1);
-              const isDiarista = w.employment_type === "diarista";
-              const todayAmount = isDiarista && current === "presente" ? (w.daily_rate ?? 0) * fraction : 0;
+          <div className="space-y-3">
+            {groupedTeams.length === 0 ? (
+              <EmptyState text="Nenhuma equipe com integrantes ativos." />
+            ) : groupedTeams.map((team) => {
+              const expanded = expandedTeams.has(team.id);
               return (
-                <div key={w.id} className="card-surface p-3">
-                  <div className="mb-2.5 flex items-center gap-3">
-                    <Avatar text={initials(w.full_name)} />
+                <Card key={team.id} className="overflow-hidden p-0">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedTeams((current) => {
+                      const next = new Set(current);
+                      if (next.has(team.id)) next.delete(team.id);
+                      else next.add(team.id);
+                      return next;
+                    })}
+                    className="flex w-full items-center gap-3 p-3 text-left"
+                  >
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                      <Users className="size-5" />
+                    </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold">{w.full_name}</p>
-                      <p className="text-xs capitalize text-muted-foreground">
-                        {w.job_role} · {isDiarista ? "diarista" : "CLT"}
-                      </p>
-                      {isDiarista && current === "presente" ? (
-                        w.daily_rate && w.daily_rate > 0 ? (
-                          <p className="mt-1 text-xs font-semibold text-primary">
-                            {fraction === 0.5 ? "½ diária" : "Diária integral"} · + {brl(todayAmount)} a receber hoje
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-xs font-semibold text-warning">Valor da diária não cadastrado</p>
-                        )
-                      ) : null}
+                      <p className="truncate text-sm font-semibold">{team.name}</p>
+                      <p className="text-xs text-muted-foreground">{team.members.length} integrante(s)</p>
                     </div>
-                    <Badge tone={toneFor(current)}>
-                      {current === "presente" && fraction === 0.5 ? "½ período" : current ? current.replace("_", " ") : "pendente"}
-                    </Badge>
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {options.map(({ key, label, icon: Icon }) => (
-                      <button
-                        key={key}
-                        onClick={async () => {
-                          setActionError(null);
-                          try {
-                            await setAttendanceStatus(w.id, date, key, notes, contractId, key === "presente" ? 1 : 0);
-                          } catch (error) {
-                            setActionError(error instanceof Error ? error.message : "Não foi possível salvar a marcação.");
-                          }
-                        }}
-                        className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[10px] font-semibold transition-colors ${current === key ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}
-                      >
-                        <Icon className="size-4" />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {row ? (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setActionError(null);
-                        try {
-                          await deleteAttendance(row.id);
-                        } catch (error) {
-                          setActionError(error instanceof Error ? error.message : "Não foi possível excluir a marcação.");
-                        }
-                      }}
-                      className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/5"
-                    >
-                      <Trash2 className="size-4" />
-                      Excluir marcação
-                    </button>
-                  ) : null}
-                  {actionError ? (
-                    <p className="mt-2 text-[11px] font-medium text-destructive">{actionError}</p>
-                  ) : null}
-                  {isDiarista && current === "presente" ? (
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 1)}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 1 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}
-                      >
-                        Dia integral · {brl(w.daily_rate ?? 0)}
-                      </button>
-                      <button
-                        onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 0.5)}
-                        className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 0.5 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}
-                      >
-                        ½ período · {brl((w.daily_rate ?? 0) * 0.5)}
-                      </button>
+                    {expanded ? <ChevronDown className="size-5 text-muted-foreground" /> : <ChevronRight className="size-5 text-muted-foreground" />}
+                  </button>
+
+                  {expanded ? (
+                    <div className="space-y-2 border-t border-border bg-muted/20 p-2">
+                      {team.members.map((w) => {
+                        const row = dayRows.get(w.id);
+                        const current = row?.status;
+                        const fraction = Number(row?.work_fraction ?? 1);
+                        const isDiarista = w.employment_type === "diarista";
+                        const todayAmount = isDiarista && current === "presente" ? (w.daily_rate ?? 0) * fraction : 0;
+                        return (
+                          <div key={w.id} className="card-surface p-3">
+                            <div className="mb-2.5 flex items-center gap-3">
+                              <Avatar text={initials(w.full_name)} />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold">{w.full_name}</p>
+                                <p className="text-xs capitalize text-muted-foreground">{w.job_role} · {isDiarista ? "diarista" : "CLT"}</p>
+                                {isDiarista && current === "presente" ? (
+                                  w.daily_rate && w.daily_rate > 0 ? (
+                                    <p className="mt-1 text-xs font-semibold text-primary">{fraction === 0.5 ? "½ diária" : "Diária integral"} · + {brl(todayAmount)} a receber hoje</p>
+                                  ) : <p className="mt-1 text-xs font-semibold text-warning">Valor da diária não cadastrado</p>
+                                ) : null}
+                              </div>
+                              <Badge tone={toneFor(current)}>
+                                {current === "presente" && fraction === 0.5 ? "½ período" : current ? current.replace("_", " ") : "pendente"}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {options.map(({ key, label, icon: Icon }) => (
+                                <button
+                                  key={key}
+                                  onClick={async () => {
+                                    setActionError(null);
+                                    try {
+                                      await setAttendanceStatus(w.id, date, key, notes, contractId, key === "presente" ? 1 : 0);
+                                    } catch (error) {
+                                      setActionError(error instanceof Error ? error.message : "Não foi possível salvar a marcação.");
+                                    }
+                                  }}
+                                  className={`flex flex-col items-center gap-1 rounded-xl border py-2 text-[10px] font-semibold transition-colors ${current === key ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}
+                                >
+                                  <Icon className="size-4" />{label}
+                                </button>
+                              ))}
+                            </div>
+                            {row ? (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  setActionError(null);
+                                  try { await deleteAttendance(row.id); }
+                                  catch (error) { setActionError(error instanceof Error ? error.message : "Não foi possível excluir a marcação."); }
+                                }}
+                                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 py-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/5"
+                              >
+                                <Trash2 className="size-4" /> Excluir marcação
+                              </button>
+                            ) : null}
+                            {actionError ? <p className="mt-2 text-[11px] font-medium text-destructive">{actionError}</p> : null}
+                            {isDiarista && current === "presente" ? (
+                              <div className="mt-2 grid grid-cols-2 gap-2">
+                                <button onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 1)} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 1 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}>
+                                  Dia integral · {brl(w.daily_rate ?? 0)}
+                                </button>
+                                <button onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 0.5)} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 0.5 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}>
+                                  ½ período · {brl((w.daily_rate ?? 0) * 0.5)}
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : null}
-                </div>
+                </Card>
               );
             })}
           </div>
