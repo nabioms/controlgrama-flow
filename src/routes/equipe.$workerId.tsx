@@ -124,8 +124,9 @@ function WorkerDetail() {
   const docs = workerDocuments.filter((d) => d.worker_id === worker.id);
   const events = workerEvents.filter((e) => e.worker_id === worker.id);
   const history = payments.filter((p) => p.worker_id === worker.id);
-  const workerTeam = teams.find((t) => t.members?.some((m) => m.id === worker.id));\n  const whatsappUrl = (() => {
-    const digits = (worker.phone || "").replace(/\\D/g, "");
+  const workerTeam = teams.find((t) => t.members?.some((m) => m.id === worker.id));
+  const whatsappUrl = (() => {
+    const digits = (worker.phone || "").replace(/\D/g, "");
     if (!digits) return null;
     const phone = digits.startsWith("55") ? digits : `55${digits}`;
     return `https://wa.me/${phone}`;
