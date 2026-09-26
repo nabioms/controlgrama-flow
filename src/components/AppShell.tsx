@@ -7,7 +7,6 @@ import {
   Boxes,
   ChevronDown,
   FileText,
-  Home,
   LogOut,
   Moon,
   Sun,
@@ -21,7 +20,7 @@ import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 
 const navItems = [
-  { to: "/", label: "Início", icon: Home },
+  { to: "/estoque", label: "Estoque", icon: Boxes },
   { to: "/ponto", label: "Ponto", icon: CalendarCheck2 },
   { to: "/diarias", label: "Diárias", icon: Wallet },
   { to: "/os", label: "O.S.", icon: ClipboardList },
@@ -116,15 +115,6 @@ export function AppShell({
                       </div>
                     </div>
                     <div className="my-1 border-t border-border" />
-                    <Link
-                      to="/estoque"
-                      role="menuitem"
-                      onClick={() => setAccountOpen(false)}
-                      className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-foreground transition hover:bg-accent"
-                    >
-                      <Boxes className="size-4" />
-                      Estoque
-                    </Link>
                     <button
                       type="button"
                       role="menuitem"
