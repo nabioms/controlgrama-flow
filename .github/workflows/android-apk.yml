@@ -6,6 +6,7 @@ on:
     branches: ["main"]
 
 # Rebuild package on demand via main push.
+# APK rebuild requested.
 permissions:
   contents: read
 
