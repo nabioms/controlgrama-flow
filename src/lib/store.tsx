@@ -52,7 +52,11 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("service_types").select("*").order("name"),
    supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*), team:teams(*), service_order_workers(worker_id, worker:workers(*)), service_order_items(*, service_type:service_types(*))").order("service_date",{ascending:false}).order("order_number",{ascending:false})
   ]);
-  const bad=q.find(x=>x.error); if(bad?.error){setError(bad.error.message);setLoading(false);return;}
+  const errors=q.map((x,i)=>x.error?{index:i,error:x.error}:null).filter(Boolean) as {index:number;error:any}[];
+  if(errors.length){
+   console.error("ControlGrama: falhas ao carregar dados",errors.map(x=>({queryIndex:x.index,message:x.error?.message})));
+   setError(errors.map(x=>x.error?.message||"Erro ao carregar dados").join(" | "));
+  }
   const [pr,w,c,cat,inv,docs,events,epis,att,periods,pay,allowances,rec,pb,settings,tm,st,so]=q;
   setRole((pr.data?.role as UserRole)||"encarregado");setWorkers((w.data||[]).map(worker));setContracts(c.data||[]);setExpenseCategories(cat.data||[]);
   setInvoices(inv.data||[]);setWorkerDocuments(docs.data||[]);setWorkerEvents(events.data||[]);setWorkerEpis((epis.data||[]) as WorkerEpi[]);setAttendance(att.data||[]);setPaymentPeriods(periods.data||[]);
