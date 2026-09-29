@@ -146,7 +146,7 @@ export function StoreProvider({children}:{children:ReactNode}){
  const updateWorkerEpi=useCallback(async(id:string,patch:Partial<Pick<WorkerEpi,"delivered"|"returned"|"delivered_at"|"returned_at">>)=>{const {data,error}=await supabase.from("worker_epis").update({...patch,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();if(error)throw error;setWorkerEpis(x=>x.map(e=>e.id===id?data as WorkerEpi:e));},[]);
  const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction=1)=>{
   const fraction=status==="presente"?workFraction:0;
-  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null},{onConflict:"worker_id,date"}).select("*").single();
+  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null,paid_at:null,payment_method:null},{onConflict:"worker_id,date"}).select("*").single();
   if(error)throw error;
   setAttendance(x=>[data,...x.filter(a=>!(a.worker_id===workerId&&a.date===dateValue))]);
 },[]);
