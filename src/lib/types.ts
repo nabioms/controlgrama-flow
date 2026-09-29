@@ -70,7 +70,7 @@ export interface WorkerEpi {
 }
 
 export type AttendanceStatus = "presente" | "falta" | "falta_justificada" | "atestado";
-export interface Attendance { id: UUID; worker_id: UUID; date: ISODate; status: AttendanceStatus; work_fraction?: number; notes: string | null; contract_id: UUID | null; }
+export interface Attendance { id: UUID; worker_id: UUID; date: ISODate; status: AttendanceStatus; work_fraction?: number; notes: string | null; contract_id: UUID | null; paid_at?: ISODate | null; payment_method?: PaymentMethod | null; }
 
 export type PaymentCycle = "quinto_dia_util" | "dia_20";
 export type PeriodStatus = "aberto" | "fechado" | "pago";
