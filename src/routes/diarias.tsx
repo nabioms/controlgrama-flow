@@ -93,7 +93,7 @@ const paymentCycles = (month: string) => {
 const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { workers, attendance, payments, paymentPeriods, setAttendanceStatus, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
+  const { workers, attendance, payments, paymentPeriods, setAttendanceStatus, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -101,6 +101,8 @@ function DiariasPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
   const [payingPaymentId, setPayingPaymentId] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [dailyPaymentMethod, setDailyPaymentMethod] = useState<PaymentMethod>("pix");
+  const [payingAttendanceId, setPayingAttendanceId] = useState<string | null>(null);
 
   useEffect(() => {
     const now = toISO(new Date());
@@ -130,7 +132,7 @@ function DiariasPage() {
 
   const getMonthRows = (worker: Worker, targetMonth: string) =>
     (attendanceByWorker.get(worker.id) ?? []).filter(
-      (row) => row.date.startsWith(targetMonth) && isWorked(row),
+      (row) => row.date.startsWith(targetMonth) && isWorked(row) && !row.paid_at,
     );
 
   const monthData = useMemo(() => {
@@ -155,7 +157,7 @@ function DiariasPage() {
     const allRows = (attendanceByWorker.get(selectedWorker.id) ?? []).filter(
       (row) => row.date.startsWith(month),
     );
-    const rows = allRows.filter(isWorked);
+    const rows = allRows.filter((row) => isWorked(row) && !row.paid_at);
     const rowMap = new Map(allRows.map((row) => [row.date, row]));
     const cycles = paymentCycles(month);
 
@@ -431,14 +433,21 @@ function DiariasPage() {
                 >
                   <p className="text-[10px] font-semibold">{day}</p>
                   {worked ? (
-                    <>
-                      <p className="mt-1 truncate text-[8px] font-semibold leading-tight text-primary-deep">
-                        {fraction === 0.5 ? "½ dia" : "dia"}
-                      </p>
-                      <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-primary-deep" title={brl(amount)}>
-                        {brl(amount)}
-                      </p>
-                    </>
+                    row.paid_at ? (
+                      <>
+                        <p className="mt-1 truncate text-[8px] font-bold text-primary-deep">Pago</p>
+                        <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-primary-deep">{brl(amount)}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="mt-1 truncate text-[8px] font-semibold leading-tight text-primary-deep">
+                          {fraction === 0.5 ? "½ dia" : "dia"}
+                        </p>
+                        <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-primary-deep" title={brl(amount)}>
+                          {brl(amount)}
+                        </p>
+                      </>
+                    )
                   ) : absent ? (
                     <p className="mt-2 truncate text-[9px] font-bold text-destructive">Falta</p>
                   ) : (
@@ -481,7 +490,24 @@ function DiariasPage() {
                   </div>
                 );
               })}
-            {!payments.some((p) => p.worker_id === selectedWorker.id && p.status === "pago") ? (
+            {attendance
+              .filter((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at)
+              .sort((a, b) => String(b.paid_at || "").localeCompare(String(a.paid_at || "")))
+              .map((row) => {
+                const amount = Number(selectedWorker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
+                return (
+                  <div key={`daily-${row.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary-soft p-2.5">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold">Diária individual · {formatDate(row.date)}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Baixada em {formatDate(row.paid_at!)}{row.payment_method ? " · " + (row.payment_method === "pix" ? "PIX" : row.payment_method === "dinheiro" ? "Dinheiro" : "Transferência") : ""}
+                      </p>
+                    </div>
+                    <p className="shrink-0 text-sm font-bold text-primary-deep">{brl(amount)}</p>
+                  </div>
+                );
+              })}
+            {!payments.some((p) => p.worker_id === selectedWorker.id && p.status === "pago") && !attendance.some((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at) ? (
               <p className="py-2 text-[11px] text-muted-foreground">Nenhum pagamento baixado ainda.</p>
             ) : null}
           </div>
@@ -538,6 +564,55 @@ function DiariasPage() {
                   >
                     Marcar como falta
                   </Button>
+                  {workedNow && !current?.paid_at ? (
+                    <>
+                      <div className="mt-3 rounded-lg border border-border bg-muted/20 p-2">
+                        <p className="text-[11px] font-semibold">Baixar esta diária individual</p>
+                        <p className="mt-1 text-[10px] text-muted-foreground">
+                          Use quando o diarista receber antecipadamente esta diária. Ela será descontada do próximo fechamento.
+                        </p>
+                        <div className="mt-2 grid grid-cols-3 gap-1">
+                          {(["pix", "dinheiro", "transferencia"] as PaymentMethod[]).map((method) => (
+                            <button
+                              key={method}
+                              type="button"
+                              onClick={() => setDailyPaymentMethod(method)}
+                              className={`rounded-lg border px-2 py-1.5 text-[10px] font-semibold ${dailyPaymentMethod === method ? "border-primary bg-primary-soft text-primary-deep" : "border-border bg-card text-muted-foreground"}`}
+                            >
+                              {method === "pix" ? "PIX" : method === "dinheiro" ? "Dinheiro" : "Transferência"}
+                            </button>
+                          ))}
+                        </div>
+                        <Button
+                          variant="primary"
+                          className="mt-2 w-full"
+                          disabled={payingAttendanceId === current.id}
+                          onClick={async () => {
+                            setDeleteError(null);
+                            setPayingAttendanceId(current.id);
+                            try {
+                              await markAttendancePaid(current.id, dailyPaymentMethod);
+                              setEditingDate(null);
+                            } catch (error) {
+                              setDeleteError(error instanceof Error ? error.message : "Não foi possível registrar a baixa da diária.");
+                            } finally {
+                              setPayingAttendanceId(null);
+                            }
+                          }}
+                        >
+                          {payingAttendanceId === current.id ? "Registrando..." : `Dar baixa nesta diária — ${brl((selectedWorker.daily_rate ?? 0) * currentFraction)}`}
+                        </Button>
+                      </div>
+                    </>
+                  ) : null}
+                  {workedNow && current?.paid_at ? (
+                    <div className="mt-3 rounded-lg border border-primary bg-primary-soft p-2">
+                      <p className="text-xs font-semibold text-primary-deep">✓ Diária paga antecipadamente</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Pago em {formatDate(current.paid_at)}{current.payment_method ? " · " + (current.payment_method === "pix" ? "PIX" : current.payment_method === "dinheiro" ? "Dinheiro" : "Transferência") : ""}
+                      </p>
+                    </div>
+                  ) : null}
                   {current ? (
                     <Button
                       variant="soft"
