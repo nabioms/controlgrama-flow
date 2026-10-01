@@ -93,7 +93,7 @@ const paymentCycles = (month: string) => {
 const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { workers, attendance, payments, paymentPeriods, setAttendanceStatus, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
+  const { workers, attendance, payments, paymentPeriods, setAttendanceStatus, updateAttendanceAmount, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -103,6 +103,8 @@ function DiariasPage() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [dailyPaymentMethod, setDailyPaymentMethod] = useState<PaymentMethod>("pix");
   const [payingAttendanceId, setPayingAttendanceId] = useState<string | null>(null);
+  const [dailyAmountInput, setDailyAmountInput] = useState("");
+  const [savingDailyAmount, setSavingDailyAmount] = useState(false);
 
   useEffect(() => {
     const now = toISO(new Date());
@@ -119,6 +121,11 @@ function DiariasPage() {
   );
 
   const selectedWorker = diaristas.find((worker) => worker.id === selectedWorkerId) ?? null;
+
+  const attendanceAmount = (worker: Worker, row: Attendance) => {
+    const custom = Number(row.daily_amount);
+    return Number.isFinite(custom) ? custom : Number(worker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
+  };
 
   const attendanceByWorker = useMemo(() => {
     const map = new Map<string, Attendance[]>();
@@ -144,7 +151,7 @@ function DiariasPage() {
         worker,
         rows,
         days,
-        amount: Math.round(days * (worker.daily_rate ?? 0) * 100) / 100,
+        amount: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
   }, [month, diaristas, attendanceByWorker]);
@@ -165,7 +172,7 @@ function DiariasPage() {
       const days = items.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
       return {
         days,
-        amount: Math.round(days * (selectedWorker.daily_rate ?? 0) * 100) / 100,
+        amount: Math.round(items.reduce((sum, row) => sum + attendanceAmount(selectedWorker, row), 0) * 100) / 100,
       };
     };
 
@@ -415,13 +422,13 @@ function DiariasPage() {
               const fraction = Number(row?.work_fraction ?? 1);
               const worked = isWorked(row);
               const absent = row?.status === "falta";
-              const amount = worked ? (selectedWorker.daily_rate ?? 0) * fraction : 0;
+              const amount = worked ? attendanceAmount(selectedWorker, row!) : 0;
 
               return (
                 <button
                   key={iso}
                   type="button"
-                  onClick={() => { setEditingDate(iso); setDeleteError(null); }}
+                  onClick={() => { setEditingDate(iso); setDailyAmountInput(row?.daily_amount != null ? String(row.daily_amount) : String((selectedWorker.daily_rate ?? 0) * fraction)); setDeleteError(null); }}
                   className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
                       ? row?.paid_at
@@ -553,6 +560,49 @@ function DiariasPage() {
                       Fechar
                     </button>
                   </div>
+                  {workedNow ? (
+                    <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/60 p-3 dark:border-blue-900 dark:bg-blue-950/20">
+                      <p className="text-xs font-semibold">Valor desta diária</p>
+                      <p className="mt-1 text-[10px] text-muted-foreground">
+                        Altere somente esta data. A diária padrão de {brl(selectedWorker.daily_rate ?? 0)} continua igual para os outros dias.
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-sm font-semibold">R$</span>
+                        <input
+                          inputMode="decimal"
+                          value={dailyAmountInput}
+                          onChange={(e) => setDailyAmountInput(e.target.value.replace(",", ".").replace(/[^0-9.]/g, ""))}
+                          disabled={Boolean(current?.paid_at) || savingDailyAmount}
+                          className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold outline-none focus:border-primary"
+                        />
+                        <Button
+                          variant="primary"
+                          disabled={Boolean(current?.paid_at) || savingDailyAmount}
+                          onClick={async () => {
+                            const amount = Number(dailyAmountInput);
+                            if (!Number.isFinite(amount) || amount < 0) {
+                              setDeleteError("Informe um valor válido para a diária.");
+                              return;
+                            }
+                            setSavingDailyAmount(true);
+                            setDeleteError(null);
+                            try {
+                              await updateAttendanceAmount(current.id, amount);
+                            } catch (error) {
+                              setDeleteError(error instanceof Error ? error.message : "Não foi possível alterar o valor da diária.");
+                            } finally {
+                              setSavingDailyAmount(false);
+                            }
+                          }}
+                        >
+                          {savingDailyAmount ? "Salvando..." : "Salvar valor"}
+                        </Button>
+                      </div>
+                      {current?.paid_at ? (
+                        <p className="mt-2 text-[10px] font-medium text-amber-700">Esta diária já foi paga e não pode ter o valor alterado.</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <Button
                       variant={workedNow && currentFraction === 1 ? "primary" : "soft"}
@@ -619,7 +669,7 @@ function DiariasPage() {
                             }
                           }}
                         >
-                          {payingAttendanceId === current.id ? "Registrando..." : `Dar baixa nesta diária — ${brl((selectedWorker.daily_rate ?? 0) * currentFraction)}`}
+                          {payingAttendanceId === current.id ? "Registrando..." : `Dar baixa nesta diária — ${brl(current ? attendanceAmount(selectedWorker, current) : 0)}`}
                         </Button>
                       </div>
                     </>
