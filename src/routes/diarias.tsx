@@ -479,7 +479,7 @@ function DiariasPage() {
               .reduce((sum, p) => sum + Number(p.gross_amount || 0), 0);
             const paidDailyTotal = attendance
               .filter((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at)
-              .reduce((sum, row) => sum + Number(selectedWorker.daily_rate ?? 0) * Number(row.work_fraction ?? 1), 0);
+              .reduce((sum, row) => sum + attendanceAmount(selectedWorker, row), 0);
             const accumulatedTotal = paidPeriodTotal + paidDailyTotal;
             return (
               <>
@@ -517,7 +517,7 @@ function DiariasPage() {
               .filter((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at)
               .sort((a, b) => String(b.paid_at || "").localeCompare(String(a.paid_at || "")))
               .map((row) => {
-                const amount = Number(selectedWorker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
+                const amount = attendanceAmount(selectedWorker, row);
                 return (
                   <div key={`daily-${row.id}`} className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary-soft p-2.5">
                     <div className="min-w-0">
