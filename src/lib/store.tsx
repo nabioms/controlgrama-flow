@@ -146,10 +146,20 @@ export function StoreProvider({children}:{children:ReactNode}){
  const updateWorkerEpi=useCallback(async(id:string,patch:Partial<Pick<WorkerEpi,"delivered"|"returned"|"delivered_at"|"returned_at">>)=>{const {data,error}=await supabase.from("worker_epis").update({...patch,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();if(error)throw error;setWorkerEpis(x=>x.map(e=>e.id===id?data as WorkerEpi:e));},[]);
  const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction=1)=>{
   const fraction=status==="presente"?workFraction:0;
-  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null,paid_at:null,payment_method:null},{onConflict:"worker_id,date"}).select("*").single();
+  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null,paid_at:null,payment_method:null,daily_amount:null},{onConflict:"worker_id,date"}).select("*").single();
   if(error)throw error;
   setAttendance(x=>[data,...x.filter(a=>!(a.worker_id===workerId&&a.date===dateValue))]);
 },[]);
+ const updateAttendanceAmount=useCallback(async(id:string,amount:number)=>{
+  if(!Number.isFinite(amount)||amount<0)throw new Error("Informe um valor válido para a diária.");
+  const {data,error}=await supabase.from("attendance").update({daily_amount:Math.round(amount*100)/100,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();
+  if(error)throw error;
+  setAttendance(x=>x.map(a=>a.id===id?data as Attendance:a));
+ },[]);
+ const attendanceAmount=(row:Attendance,worker:Worker)=>{
+  const custom=Number(row.daily_amount);
+  return Number.isFinite(custom) ? custom : Number(worker.daily_rate||0)*Number(row.work_fraction??1);
+ };
  const markAttendancePaid=useCallback(async(id:string,m:PaymentMethod)=>{
   const current=attendance.find(a=>a.id===id);
   if(!current || current.status!=="presente")throw new Error("Somente uma diária trabalhada pode receber baixa.");
@@ -163,7 +173,7 @@ export function StoreProvider({children}:{children:ReactNode}){
     if(worker){
       const unpaid=attendance.filter(a=>a.worker_id===worker.id&&a.date>=cycle.start_date&&a.date<=cycle.end_date&&a.status==="presente"&&a.id!==id&&!a.paid_at).reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
       const remainingDays=Math.round(unpaid*100)/100;
-      const remainingAmount=Math.round(remainingDays*Number(worker.daily_rate||0)*100)/100;
+      const remainingAmount=Math.round(attendance.filter(a=>a.worker_id===worker.id&&a.date>=cycle.start_date&&a.date<=cycle.end_date&&a.status==="presente"&&a.id!==id&&!a.paid_at).reduce((sum,a)=>sum+attendanceAmount(a,worker),0)*100)/100;
       const existing=payments.find(p=>p.period_id===cycle.id&&p.worker_id===worker.id);
       if(existing){
         if(existing.status==="pago")throw new Error("O período deste pagamento já foi totalmente pago.");
@@ -189,7 +199,7 @@ export function StoreProvider({children}:{children:ReactNode}){
       .filter(a=>a.worker_id===w.id&&a.date>=p.start_date&&a.date<=p.end_date&&a.status==="presente"&&!a.paid_at)
       .reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
     if(!workedDays)continue;
-    const gross=w.employment_type==="diarista"?workedDays*(w.daily_rate||0):(w.salary||0)*workedDays/30;
+    const gross=w.employment_type==="diarista" ? attendance.filter(a=>a.worker_id===w.id&&a.date>=p.start_date&&a.date<=p.end_date&&a.status==="presente"&&!a.paid_at).reduce((sum,a)=>sum+attendanceAmount(a,w),0) : (w.salary||0)*workedDays/30;
     const {error}=await supabase.from("payments").upsert({
       period_id:id,worker_id:w.id,worked_days:Math.round(workedDays*100)/100,
       daily_rate:w.employment_type==="diarista"?w.daily_rate:null,
@@ -236,7 +246,7 @@ export function StoreProvider({children}:{children:ReactNode}){
       .filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at)
       .reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
     if(!workedDays)continue;
-    const gross=workedDays*(w.daily_rate||0);
+    const gross=attendance.filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at).reduce((sum,a)=>sum+attendanceAmount(a,w),0);
     const {error}=await supabase.from("payments").upsert({
       period_id:period.id,worker_id:w.id,worked_days:Math.round(workedDays*100)/100,
       daily_rate:w.daily_rate||0,gross_amount:Math.round(gross*100)/100,status:"pendente"
@@ -342,7 +352,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — pagamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — pagamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
  const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0),paidAllowances=dailyAllowances.reduce((s,a)=>s+Number(a.amount||0),0);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}
