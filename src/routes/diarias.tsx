@@ -466,10 +466,24 @@ function DiariasPage() {
         </p>
 
         <Card className="mt-4 p-3">
-          <p className="text-sm font-semibold">Histórico de pagamentos</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">Pagamentos deste diarista já baixados no sistema.</p>
-          <div className="mt-3 space-y-2">
-            {payments
+          {(() => {
+            const paidPeriodTotal = payments
+              .filter((p) => p.worker_id === selectedWorker.id && p.status === "pago")
+              .reduce((sum, p) => sum + Number(p.gross_amount || 0), 0);
+            const paidDailyTotal = attendance
+              .filter((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at)
+              .reduce((sum, row) => sum + Number(selectedWorker.daily_rate ?? 0) * Number(row.work_fraction ?? 1), 0);
+            const accumulatedTotal = paidPeriodTotal + paidDailyTotal;
+            return (
+              <>
+                <p className="text-sm font-semibold">Histórico de pagamentos</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">Histórico acumulado deste diarista. Os pagamentos anteriores continuam registrados mesmo após virar o mês.</p>
+                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Total pago acumulado</p>
+                  <p className="mt-0.5 text-xl font-bold text-emerald-700 dark:text-emerald-300">{brl(accumulatedTotal)}</p>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {payments
               .filter((p) => p.worker_id === selectedWorker.id && p.status === "pago")
               .sort((a, b) => String(b.paid_at || "").localeCompare(String(a.paid_at || "")))
               .map((p) => {
@@ -509,10 +523,13 @@ function DiariasPage() {
                   </div>
                 );
               })}
-            {!payments.some((p) => p.worker_id === selectedWorker.id && p.status === "pago") && !attendance.some((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at) ? (
-              <p className="py-2 text-[11px] text-muted-foreground">Nenhum pagamento baixado ainda.</p>
-            ) : null}
-          </div>
+                  {!payments.some((p) => p.worker_id === selectedWorker.id && p.status === "pago") && !attendance.some((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at) ? (
+                    <p className="py-2 text-[11px] text-muted-foreground">Nenhum pagamento baixado ainda.</p>
+                  ) : null}
+                </div>
+              </>
+            );
+          })()}
         </Card>
 
         {editingDate ? (
