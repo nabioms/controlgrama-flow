@@ -394,7 +394,7 @@ function DiariasPage() {
             <CalendarDays className="size-4 text-primary" />
             <div>
               <p className="text-sm font-semibold">Calendário de trabalho</p>
-              <p className="text-[11px] text-muted-foreground">Toque em um dia trabalhado para conferir o valor.</p>
+              <p className="text-[11px] text-muted-foreground">Azul = realizada · Verde = paga · Vermelho = falta.</p>
             </div>
           </div>
 
@@ -424,26 +424,28 @@ function DiariasPage() {
                   onClick={() => { setEditingDate(iso); setDeleteError(null); }}
                   className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
-                      ? "border-primary bg-primary-soft"
+                      ? row?.paid_at
+                        ? "border-emerald-500 bg-emerald-50 dark:border-emerald-400 dark:bg-emerald-950/30"
+                        : "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30"
                       : absent
                         ? "border-destructive bg-destructive/10"
                         : "border-border bg-card"
                   }`}
-                  title={worked ? "Editar diária" : absent ? "Falta registrada" : "Lançar diária"}
+                  title={worked ? (row?.paid_at ? "Diária paga" : "Diária realizada — pendente") : absent ? "Falta registrada" : "Lançar diária"}
                 >
                   <p className="text-[10px] font-semibold">{day}</p>
                   {worked ? (
                     row.paid_at ? (
                       <>
-                        <p className="mt-1 truncate text-[8px] font-bold text-primary-deep">Pago</p>
-                        <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-primary-deep">{brl(amount)}</p>
+                        <p className="mt-1 truncate text-[8px] font-bold text-emerald-700 dark:text-emerald-300">Pago</p>
+                        <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-emerald-700 dark:text-emerald-300">{brl(amount)}</p>
                       </>
                     ) : (
                       <>
-                        <p className="mt-1 truncate text-[8px] font-semibold leading-tight text-primary-deep">
+                        <p className="mt-1 truncate text-[8px] font-semibold leading-tight text-blue-700 dark:text-blue-300">
                           {fraction === 0.5 ? "½ dia" : "dia"}
                         </p>
-                        <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-primary-deep" title={brl(amount)}>
+                        <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-blue-700 dark:text-blue-300" title={brl(amount)}>
                           {brl(amount)}
                         </p>
                       </>
