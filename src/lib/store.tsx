@@ -176,7 +176,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   const current=attendance.find(a=>a.id===id);
   if(!current || current.status!=="presente")throw new Error("Somente uma diária trabalhada pode receber baixa.");
   if(current.paid_at)throw new Error("Esta diária já está baixada como paga.");
-  const paidAt=new Date().toISOString().slice(0,10);
+  const paidAt=toISO(new Date());
   const {data,error}=await supabase.from("attendance").update({paid_at:paidAt,payment_method:m,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();
   if(error)throw error;
   const cycle=paymentPeriods.find(p=>current.date>=p.start_date&&current.date<=p.end_date);
@@ -224,7 +224,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   await refresh();
 },[paymentPeriods,workers,attendance,refresh]);
  const markPaymentPaid=useCallback(async(id:string,m:PaymentMethod)=>{
-  const paidAt=new Date().toISOString().slice(0,10);
+  const paidAt=toISO(new Date());
   const {data:updated,error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:paidAt}).eq("id",id).select("period_id").single();
   if(error)throw error;
   const {data:remaining,error:remainingError}=await supabase.from("payments").select("id").eq("period_id",updated.period_id).neq("status","pago");

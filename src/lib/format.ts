@@ -28,7 +28,7 @@ export const toISO = (d: Date) => {
 
 export const formatDate = (iso: string | null) => {
   if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
+  const [y, m, d] = String(iso).slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
 };
 
