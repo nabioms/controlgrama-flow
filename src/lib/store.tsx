@@ -31,6 +31,18 @@ const payable=(r:any):Payable=>({...r,due_date:date(r.due_date),paid_at:date(r.p
 const receivable=(r:any):Receivable=>({...r,contract_id:r.contract_id||null,service_order_id:r.service_order_id||null,expected_date:date(r.expected_date),received_at:date(r.received_at)});
 const payment=(r:any):Payment=>({...r,paid_at:date(r.paid_at)});
 
+// O servidor devolve no máximo 1000 linhas por consulta. Busca em páginas para não esconder o histórico antigo.
+async function fetchAll(make:()=>any):Promise<{data:any[]|null;error:any}>{
+ const out:any[]=[];
+ for(let from=0;;from+=1000){
+  const {data,error}=await make().range(from,from+999);
+  if(error)return {data:null,error};
+  out.push(...(data||[]));
+  if(!data||data.length<1000)break;
+ }
+ return {data:out,error:null};
+}
+
 export function StoreProvider({children}:{children:ReactNode}){
  const [role,setRole]=useState<UserRole>("encarregado"),[workers,setWorkers]=useState<Worker[]>([]),[contracts,setContracts]=useState<Contract[]>([]);
  const [expenseCategories,setExpenseCategories]=useState<ExpenseCategory[]>([]),[invoices,setInvoices]=useState<Invoice[]>([]),[workerDocuments,setWorkerDocuments]=useState<WorkerDocument[]>([]),[workerEvents,setWorkerEvents]=useState<WorkerEvent[]>([]),[workerEpis,setWorkerEpis]=useState<WorkerEpi[]>([]);
@@ -45,8 +57,8 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("profiles").select("role").maybeSingle(),supabase.from("workers").select("*").order("full_name"),
    supabase.from("contracts").select("*").order("start_date",{ascending:false}),supabase.from("expense_categories").select("*").order("label"),
    supabase.from("invoices").select("*").order("issue_date",{ascending:false}),supabase.from("worker_documents").select("*").order("expires_at"),
-   supabase.from("worker_events").select("*").order("date",{ascending:false}),supabase.from("worker_epis").select("*").order("epi_kind"),supabase.from("attendance").select("*").order("date",{ascending:false}),
-   supabase.from("payment_periods").select("*").order("pay_date",{ascending:false}),supabase.from("payments").select("*").order("created_at",{ascending:false}),supabase.from("daily_allowances").select("*").order("date",{ascending:false}).order("created_at",{ascending:false}),
+   supabase.from("worker_events").select("*").order("date",{ascending:false}),supabase.from("worker_epis").select("*").order("epi_kind"),fetchAll(()=>supabase.from("attendance").select("*").order("date",{ascending:false}).order("id")),
+   supabase.from("payment_periods").select("*").order("pay_date",{ascending:false}),fetchAll(()=>supabase.from("payments").select("*").order("created_at",{ascending:false}).order("id")),fetchAll(()=>supabase.from("daily_allowances").select("*").order("date",{ascending:false}).order("id")),
    supabase.from("receivables").select("*").order("expected_date"),supabase.from("payables").select("*").order("due_date"),
    supabase.from("cash_settings").select("opening_balance").eq("id",true).maybeSingle(),
    supabase.from("teams").select("*, team_members(team_id,worker_id,worker:workers(*))").order("name"),
@@ -164,7 +176,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   const current=attendance.find(a=>a.id===id);
   if(!current || current.status!=="presente")throw new Error("Somente uma diária trabalhada pode receber baixa.");
   if(current.paid_at)throw new Error("Esta diária já está baixada como paga.");
-  const paidAt=new Date().toISOString().slice(0,10);
+  const paidAt=toISO(new Date());
   const {data,error}=await supabase.from("attendance").update({paid_at:paidAt,payment_method:m,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();
   if(error)throw error;
   const cycle=paymentPeriods.find(p=>current.date>=p.start_date&&current.date<=p.end_date);
@@ -212,7 +224,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   await refresh();
 },[paymentPeriods,workers,attendance,refresh]);
  const markPaymentPaid=useCallback(async(id:string,m:PaymentMethod)=>{
-  const paidAt=new Date().toISOString().slice(0,10);
+  const paidAt=toISO(new Date());
   const {data:updated,error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:paidAt}).eq("id",id).select("period_id").single();
   if(error)throw error;
   const {data:remaining,error:remainingError}=await supabase.from("payments").select("id").eq("period_id",updated.period_id).neq("status","pago");

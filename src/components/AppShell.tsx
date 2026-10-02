@@ -166,7 +166,6 @@ export function AppShell({
             <Link
               key={to}
               to={to}
-              activeOptions={{ exact: to === "/" }}
               className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[11px] font-semibold text-muted-foreground transition-colors data-[status=active]:text-primary"
             >
               <Icon className="size-5" />
