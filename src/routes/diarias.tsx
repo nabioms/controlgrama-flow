@@ -139,7 +139,7 @@ function DiariasPage() {
 
   const getMonthRows = (worker: Worker, targetMonth: string) =>
     (attendanceByWorker.get(worker.id) ?? []).filter(
-      (row) => row.date.startsWith(targetMonth) && isWorked(row) && !row.paid_at,
+      (row) => row.date.startsWith(targetMonth) && isWorked(row),
     );
 
   const monthData = useMemo(() => {
@@ -151,7 +151,7 @@ function DiariasPage() {
         worker,
         rows,
         days,
-        amount: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
+        amount: Math.round(rows.filter((row) => !row.paid_at).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
   }, [month, diaristas, attendanceByWorker]);
