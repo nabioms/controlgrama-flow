@@ -106,6 +106,21 @@ function DiariasPage() {
   const [dailyAmountInput, setDailyAmountInput] = useState("");
   const [savingDailyAmount, setSavingDailyAmount] = useState(false);
 
+  const availableMonths = useMemo(() => {
+    const currentMonth = toISO(new Date()).slice(0, 7);
+    const historicalMonths = attendance
+      .map((row) => String(row.date).slice(0, 7))
+      .filter((value) => /^\\d{4}-\\d{2}$/.test(value) && value <= currentMonth);
+    const startMonth = historicalMonths.sort()[0] ?? currentMonth;
+    const months: string[] = [];
+    let cursor = startMonth;
+    while (cursor <= currentMonth) {
+      months.push(cursor);
+      cursor = shiftMonth(cursor, 1);
+    }
+    return months.reverse();
+  }, [attendance]);
+
   useEffect(() => {
     const now = toISO(new Date());
     setMonth(now.slice(0, 7));
@@ -247,9 +262,19 @@ function DiariasPage() {
           >
             <ChevronLeft className="size-4" />
           </button>
-          <div className="text-center">
-            <p className="font-display text-lg font-semibold capitalize">{monthTitle(month)}</p>
-            <p className="text-xs text-muted-foreground">Dias trabalhados e valores</p>
+          <div className="min-w-0 text-center">
+            <label className="sr-only" htmlFor="diarias-detail-month">Mês do histórico</label>
+            <select
+              id="diarias-detail-month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+              className="max-w-[190px] rounded-lg border border-border bg-card px-2 py-1 text-sm font-semibold capitalize outline-none focus:border-primary"
+            >
+              {availableMonths.map((item) => (
+                <option key={item} value={item}>{monthTitle(item)}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">Histórico por mês</p>
           </div>
           <button
             type="button"
@@ -728,22 +753,39 @@ function DiariasPage() {
             <p className="text-sm font-bold text-primary-deep">{brl(totalMonth)}</p>
           </div>
         </div>
-        <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={() => setMonth(shiftMonth(month, -1))}
-            className="rounded-lg border border-border p-1.5"
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <span className="text-xs text-muted-foreground">Mude o mês para consultar o histórico</span>
-          <button
-            type="button"
-            onClick={() => setMonth(shiftMonth(month, 1))}
-            className="rounded-lg border border-border p-1.5"
-          >
-            <ChevronRight className="size-4" />
-          </button>
+        <div className="mt-3 border-t border-border pt-3">
+          <label htmlFor="diarias-list-month" className="mb-1 block text-[10px] font-semibold uppercase text-muted-foreground">Mês do histórico</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMonth(shiftMonth(month, -1))}
+              disabled={month === availableMonths[availableMonths.length - 1]}
+              className="rounded-lg border border-border p-1.5 disabled:opacity-40"
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <select
+              id="diarias-list-month"
+              value={month}
+              onChange={(event) => setMonth(event.target.value)}
+              className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold capitalize outline-none focus:border-primary"
+            >
+              {availableMonths.map((item) => (
+                <option key={item} value={item}>{monthTitle(item)}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setMonth(shiftMonth(month, 1))}
+              disabled={month === availableMonths[0]}
+              className="rounded-lg border border-border p-1.5 disabled:opacity-40"
+              aria-label="Próximo mês"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">Selecione qualquer mês que tenha histórico de diárias.</p>
         </div>
       </Card>
 
