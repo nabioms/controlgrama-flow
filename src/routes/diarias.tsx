@@ -191,9 +191,57 @@ function DiariasPage() {
         rows,
         days,
         amount: Math.round(rows.filter((row) => !row.paid_at).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
+        total: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
-  }, [month, diaristas, attendanceByWorker]);
+  }, [month, diaristas, attendanceByWorker, paymentPeriods, payments]);
+
+  // Funcionários fixos com registro de ponto ou pagamento referente ao mês selecionado.
+  const fixedData = useMemo(() => {
+    if (!month) return [];
+    return workers
+      .filter((worker) => worker.employment_type === "contratado")
+      .map((worker) => {
+        const rows = (attendanceByWorker.get(worker.id) ?? []).filter((row) => row.date.startsWith(month));
+        const monthPayments = payments.filter((payment) => {
+          if (payment.worker_id !== worker.id) return false;
+          const period = paymentPeriods.find((p) => p.id === payment.period_id);
+          return period ? period.start_date.slice(0, 7) <= month && period.end_date.slice(0, 7) >= month : false;
+        });
+        return {
+          worker,
+          rows,
+          monthPayments,
+          worked: rows.filter(isWorked).reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0),
+          absences: rows.filter((row) => row.status !== "presente").length,
+        };
+      })
+      .filter((item) => item.worker.status !== "desligado" || item.rows.length > 0 || item.monthPayments.length > 0);
+  }, [month, workers, attendanceByWorker, payments, paymentPeriods]);
+
+  const renderMonthRecords = (worker: Worker, rows: Attendance[]) => {
+    const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+    if (!sorted.length) return <p className="py-1 text-[11px] text-muted-foreground">Nenhuma diária lançada neste mês.</p>;
+    return (
+      <div className="divide-y divide-border">
+        {sorted.map((row) => {
+          const status = rowPaymentStatus(worker.id, row);
+          const fraction = Number(row.work_fraction ?? 1);
+          const custom = row.daily_amount != null && String(row.daily_amount) !== "";
+          return (
+            <div key={row.id} className="flex items-center justify-between gap-2 py-1.5 text-xs">
+              <span className="w-12 shrink-0 font-semibold">{formatDate(row.date).slice(0, 5)}</span>
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+                {fraction === 0.5 ? "½ diária" : "Diária"}{custom ? " · valor personalizado" : ""}
+              </span>
+              <span className="shrink-0 font-semibold">{brl(attendanceAmount(worker, row))}</span>
+              <Badge tone={status.paid ? "success" : "warning"} className="shrink-0">{status.label}</Badge>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const totalMonth = monthData.reduce((sum, row) => sum + row.amount, 0);
 
@@ -444,6 +492,12 @@ function DiariasPage() {
           })}
         </div>
         {paymentError ? <p className="mb-4 text-xs font-medium text-destructive">{paymentError}</p> : null}
+
+        <Card className="mb-4 p-3">
+          <p className="text-sm font-semibold">Diárias de {monthTitle(month)}</p>
+          <p className="mb-2 text-[11px] text-muted-foreground">Todas as diárias trabalhadas neste mês, pagas ou não.</p>
+          {renderMonthRecords(selectedWorker, (attendanceByWorker.get(selectedWorker.id) ?? []).filter((row) => row.date.startsWith(month) && isWorked(row)))}
+        </Card>
 
         <Card className="mb-4 p-3">
           <div className="mb-3 flex items-center gap-2">
@@ -838,10 +892,68 @@ function DiariasPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm font-bold text-primary-deep">{brl(item.amount)}</p>
-                <p className="text-[10px] text-muted-foreground">a receber</p>
+                <p className="text-[10px] text-muted-foreground">a receber · {brl(item.total)} no mês</p>
               </div>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </button>
+          ))}
+        </div>
+      )}
+
+      {monthData.some((item) => item.rows.length > 0) ? (
+        <Card className="mt-4 p-3">
+          <p className="text-sm font-semibold">Diárias lançadas em {monthTitle(month)}</p>
+          <p className="mb-2 text-[11px] text-muted-foreground">Histórico permanente pela data trabalhada, mesmo que o pagamento tenha sido em outro mês.</p>
+          <div className="space-y-3">
+            {monthData.filter((item) => item.rows.length > 0).map((item) => (
+              <div key={item.worker.id}>
+                <p className="text-xs font-bold uppercase text-primary-deep">{item.worker.full_name}</p>
+                {renderMonthRecords(item.worker, item.rows)}
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      <div className="mb-3 mt-5">
+        <p className="text-sm font-semibold">Funcionários fixos</p>
+        <p className="text-xs text-muted-foreground">Presenças e pagamentos referentes a {monthTitle(month)}.</p>
+      </div>
+      {fixedData.length === 0 ? (
+        <EmptyState text="Nenhum funcionário fixo com registro neste mês." />
+      ) : (
+        <div className="space-y-2">
+          {fixedData.map((item) => (
+            <div key={item.worker.id} className="card-surface p-3">
+              <div className="flex items-center gap-3">
+                <Avatar text={initials(item.worker.full_name)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{item.worker.full_name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.worker.job_role} · {item.worked.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias presentes · {item.absences} ausência(s)
+                  </p>
+                </div>
+                <p className="shrink-0 text-xs font-semibold">{brl(item.worker.salary ?? 0)}/mês</p>
+              </div>
+              {item.monthPayments.length ? (
+                <div className="mt-2 divide-y divide-border border-t border-border">
+                  {item.monthPayments.map((payment) => {
+                    const period = paymentPeriods.find((p) => p.id === payment.period_id);
+                    return (
+                      <div key={payment.id} className="flex items-center justify-between gap-2 py-1.5 text-xs">
+                        <span className="min-w-0 flex-1 truncate">{period?.label ?? "Pagamento"}{period ? ` · ${formatDate(period.start_date)} a ${formatDate(period.end_date)}` : ""}</span>
+                        <span className="shrink-0 font-semibold">{brl(payment.gross_amount)}</span>
+                        <Badge tone={payment.status === "pago" ? "success" : "warning"}>
+                          {payment.status === "pago" ? (payment.paid_at ? `Pago em ${formatDate(payment.paid_at)}` : "Pago") : "Pendente"}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-2 border-t border-border pt-2 text-[11px] text-muted-foreground">Nenhum pagamento referente a este mês.</p>
+              )}
+            </div>
           ))}
         </div>
       )}
