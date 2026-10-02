@@ -526,6 +526,7 @@ function DiariasPage() {
               const worked = isWorked(row);
               const absent = row?.status === "falta";
               const amount = worked ? attendanceAmount(selectedWorker, row!) : 0;
+              const paidDay = Boolean(row && worked && rowPaymentStatus(selectedWorker.id, row).paid);
 
               return (
                 <button
@@ -534,18 +535,18 @@ function DiariasPage() {
                   onClick={() => { setEditingDate(iso); setDailyAmountInput(row?.daily_amount != null ? String(row.daily_amount) : String((selectedWorker.daily_rate ?? 0) * fraction)); setDeleteError(null); }}
                   className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
-                      ? row?.paid_at
+                      ? paidDay
                         ? "border-emerald-500 bg-emerald-50 dark:border-emerald-400 dark:bg-emerald-950/30"
                         : "border-blue-500 bg-blue-50 dark:border-blue-400 dark:bg-blue-950/30"
                       : absent
                         ? "border-destructive bg-destructive/10"
                         : "border-border bg-card"
                   }`}
-                  title={worked ? (row?.paid_at ? "Diária paga" : "Diária realizada — pendente") : absent ? "Falta registrada" : "Lançar diária"}
+                  title={worked ? (paidDay ? "Diária paga" : "Diária realizada — pendente") : absent ? "Falta registrada" : "Lançar diária"}
                 >
                   <p className="text-[10px] font-semibold">{day}</p>
                   {worked ? (
-                    row.paid_at ? (
+                    paidDay ? (
                       <>
                         <p className="mt-1 truncate text-[8px] font-bold text-emerald-700 dark:text-emerald-300">Pago</p>
                         <p className="max-w-full truncate text-[8px] font-semibold leading-tight text-emerald-700 dark:text-emerald-300">{brl(amount)}</p>
