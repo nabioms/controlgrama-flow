@@ -79,6 +79,7 @@ function DiariasPage() {
   const [payingAttendanceId, setPayingAttendanceId] = useState<string | null>(null);
   const [dailyAmountInput, setDailyAmountInput] = useState("");
   const [savingDailyAmount, setSavingDailyAmount] = useState(false);
+  const [calendarTouchStart, setCalendarTouchStart] = useState<{ x: number; y: number } | null>(null);
 
   const availableMonths = useMemo(() => {
     const currentMonth = toISO(new Date()).slice(0, 7);
@@ -517,7 +518,34 @@ function DiariasPage() {
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-1">
+          <div
+            className="grid grid-cols-7 gap-1"
+            style={{ touchAction: "pan-y" }}
+            onTouchStart={(event) => {
+              const touch = event.changedTouches[0];
+              if (touch) setCalendarTouchStart({ x: touch.clientX, y: touch.clientY });
+            }}
+            onTouchEnd={(event) => {
+              const start = calendarTouchStart;
+              setCalendarTouchStart(null);
+              if (!start) return;
+
+              const touch = event.changedTouches[0];
+              if (!touch) return;
+
+              const dx = touch.clientX - start.x;
+              const dy = touch.clientY - start.y;
+              const horizontalDistance = Math.abs(dx);
+              const verticalDistance = Math.abs(dy);
+
+              // Só troca o mês quando for claramente um gesto horizontal.
+              // Movimentos verticais continuam rolando a página normalmente.
+              if (horizontalDistance < 55 || horizontalDistance < verticalDistance * 1.25) return;
+
+              setMonth(shiftMonth(month, dx < 0 ? 1 : -1));
+            }}
+            onTouchCancel={() => setCalendarTouchStart(null)}
+          >
             {Array.from({ length: detail.firstWeekday }).map((_, index) => (
               <div key={`empty-${index}`} className="min-h-14 rounded-lg bg-muted/30" />
             ))}
