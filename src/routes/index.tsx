@@ -22,7 +22,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const { workers, teams, attendance, payables, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
+  const { workers, teams, attendance, payables, payments, paymentPeriods, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
   const today = toISO(new Date());
   const month = today.slice(0, 7);
   const closureDate = (() => { const d = new Date(`${nextPayDate.date}T12:00:00`); d.setDate(d.getDate() - 1); return toISO(d); })();
@@ -37,48 +37,19 @@ function Dashboard() {
   // Registros antigos de funcionários desligados não devem aparecer na chamada de hoje.
   const dayRows = attendance.filter((a) => a.date === today && activeWorkerIds.has(a.worker_id));
 
-  const nextPaymentStart = (() => {
-    const payDate = new Date(`${nextPayDate.date}T12:00:00`);
-    const payYear = payDate.getFullYear();
-    const payMonth = payDate.getMonth() + 1;
-    const currentMonthFifth = (() => {
-      let count = 0;
-      const lastDay = new Date(payYear, payMonth, 0).getDate();
-      for (let day = 1; day <= lastDay; day += 1) {
-        const weekday = new Date(payYear, payMonth - 1, day).getDay();
-        if (weekday === 0 || weekday === 6) continue;
-        count += 1;
-        if (count === 5) return `${payYear}-${String(payMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-      }
-      return nextPayDate.date;
-    })();
-
-    if (nextPayDate.label.includes("Dia 20")) {
-      return `${payYear}-${String(payMonth).padStart(2, "0")}-${String(currentMonthFifth.slice(8, 10)).padStart(2, "0")}`;
-    }
-
-    if (nextPayDate.date.slice(0, 7) === month) {
-      const previousMonthDate = new Date(payYear, payMonth - 2, 21);
-      return toISO(previousMonthDate);
-    }
-
-    const currentMonthDate = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 21);
-    return toISO(currentMonthDate);
-  })();
-
-  const estimated = diaristas.reduce((sum, w) => {
-    const worked = attendance
-      .filter(
-        (a) =>
-          a.worker_id === w.id &&
-          a.status === "presente" &&
-          a.date >= nextPaymentStart &&
-          a.date < nextPayDate.date,
-      )
-      .reduce((days, a) => days + Number(a.work_fraction ?? 1), 0);
-
-    return sum + worked * (w.daily_rate ?? 0);
-  }, 0);
+  // Total em aberto: todas as diárias trabalhadas e não pagas, de qualquer mês, até a véspera do 5º dia útil.
+  const estimated = workers
+    .filter((w) => w.employment_type === "diarista")
+    .reduce((sum, w) => {
+      const open = attendance.filter((a) => {
+        if (a.worker_id !== w.id || a.status !== "presente" || a.paid_at || a.date > closureDate) return false;
+        return !paymentPeriods.some((p) => a.date >= p.start_date && a.date <= p.end_date && payments.some((x) => x.period_id === p.id && x.worker_id === w.id && x.status === "pago"));
+      });
+      return sum + open.reduce((s, a) => {
+        const custom = a.daily_amount == null || String(a.daily_amount) === "" ? NaN : Number(a.daily_amount);
+        return s + (Number.isFinite(custom) ? custom : Number(w.daily_rate ?? 0) * Number(a.work_fraction ?? 1));
+      }, 0);
+    }, 0);
 
   const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
   const monthProduction = serviceOrders.filter((o) => o.service_date.startsWith(month) && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
