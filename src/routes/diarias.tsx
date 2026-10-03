@@ -512,6 +512,10 @@ function DiariasPage() {
             </div>
           </div>
 
+          <div className="mb-3 rounded-lg border bg-muted/20 px-3 py-2 text-center">
+            <p className="text-base font-bold capitalize">{monthTitle(month)}</p>
+          </div>
+
           <div className="mb-2 grid grid-cols-7 text-center text-[9px] font-semibold uppercase text-muted-foreground">
             {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((day) => (
               <span key={day}>{day}</span>
