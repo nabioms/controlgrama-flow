@@ -101,6 +101,25 @@ function DiariasPage() {
     setMonth(now.slice(0, 7));
   }, []);
 
+  // Situação de pagamento de cada diária: baixa individual ou incluída em um fechamento.
+  const rowPaymentStatus = (workerId: string, row: Attendance) => {
+    if (row.paid_at) return { paid: true, label: `Paga em ${formatDate(row.paid_at)}` };
+    const covering = paymentPeriods
+      .filter((p) => row.date >= p.start_date && row.date <= p.end_date)
+      .map((p) => payments.find((x) => x.period_id === p.id && x.worker_id === workerId))
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+    const paidPayment = covering.find((x) => x.status === "pago");
+    if (paidPayment) return { paid: true, label: paidPayment.paid_at ? `Paga em ${formatDate(paidPayment.paid_at)}` : "Paga" };
+    const payment = covering[0];
+    if (payment) return { paid: false, label: "Fechada · aguardando pagamento" };
+    return { paid: false, label: "Pendente" };
+  };
+
+  const attendanceAmount = (worker: Worker, row: Attendance) => {
+    const custom = row.daily_amount == null || String(row.daily_amount) === "" ? NaN : Number(row.daily_amount);
+    return Number.isFinite(custom) ? custom : Number(worker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
+  };
+
   const attendanceByWorker = useMemo(() => {
     const map = new Map<string, Attendance[]>();
     attendance.forEach((row) => {
@@ -143,25 +162,6 @@ function DiariasPage() {
   );
 
   const selectedWorker = workers.find((worker) => worker.id === selectedWorkerId) ?? null;
-
-  // Situação de pagamento de cada diária: baixa individual ou incluída em um fechamento.
-  const rowPaymentStatus = (workerId: string, row: Attendance) => {
-    if (row.paid_at) return { paid: true, label: `Paga em ${formatDate(row.paid_at)}` };
-    const covering = paymentPeriods
-      .filter((p) => row.date >= p.start_date && row.date <= p.end_date)
-      .map((p) => payments.find((x) => x.period_id === p.id && x.worker_id === workerId))
-      .filter((x): x is NonNullable<typeof x> => Boolean(x));
-    const paidPayment = covering.find((x) => x.status === "pago");
-    if (paidPayment) return { paid: true, label: paidPayment.paid_at ? `Paga em ${formatDate(paidPayment.paid_at)}` : "Paga" };
-    const payment = covering[0];
-    if (payment) return { paid: false, label: "Fechada · aguardando pagamento" };
-    return { paid: false, label: "Pendente" };
-  };
-
-  const attendanceAmount = (worker: Worker, row: Attendance) => {
-    const custom = row.daily_amount == null || String(row.daily_amount) === "" ? NaN : Number(row.daily_amount);
-    return Number.isFinite(custom) ? custom : Number(worker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
-  };
 
   const getMonthRows = (worker: Worker, targetMonth: string) =>
     (attendanceByWorker.get(worker.id) ?? []).filter(
