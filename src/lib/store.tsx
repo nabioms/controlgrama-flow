@@ -238,27 +238,28 @@ export function StoreProvider({children}:{children:ReactNode}){
  const closePaymentCycle=useCallback(async(input:{cycle:PaymentPeriod["cycle"];label:string;start_date:string;end_date:string;pay_date:string})=>{
   let {data:period,error:periodError}=await supabase.from("payment_periods")
     .select("*")
-    .eq("cycle",input.cycle)
-    .eq("start_date",input.start_date)
-    .eq("end_date",input.end_date)
+    .eq("cycle","quinto_dia_util")
     .eq("pay_date",input.pay_date)
+    .limit(1)
     .maybeSingle();
   if(periodError)throw periodError;
 
   if(!period){
     const {data:created,error}=await supabase.from("payment_periods").insert({
-      label:input.label,cycle:input.cycle,start_date:input.start_date,end_date:input.end_date,pay_date:input.pay_date,status:"aberto"
+      label:input.label,cycle:"quinto_dia_util",start_date:input.start_date,end_date:input.end_date,pay_date:input.pay_date,status:"aberto"
     }).select("*").single();
     if(error)throw error;
     period=created;
   }
 
-  for(const w of workers.filter(x=>x.status!=="desligado" && x.employment_type==="diarista")){
+  const pid=period.id;
+  const covered=(a:Attendance)=>paymentPeriods.some(p=>p.id!==pid&&a.date>=p.start_date&&a.date<=p.end_date&&payments.some(x=>x.period_id===p.id&&x.worker_id===a.worker_id));
+  for(const w of workers.filter(x=>x.employment_type==="diarista")){
     const workedDays=attendance
-      .filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at)
+      .filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at&&!covered(a))
       .reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
     if(!workedDays)continue;
-    const gross=attendance.filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at).reduce((sum,a)=>sum+attendanceAmount(a,w),0);
+    const gross=attendance.filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at&&!covered(a)).reduce((sum,a)=>sum+attendanceAmount(a,w),0);
     const {error}=await supabase.from("payments").upsert({
       period_id:period.id,worker_id:w.id,worked_days:Math.round(workedDays*100)/100,
       daily_rate:w.daily_rate||0,gross_amount:Math.round(gross*100)/100,status:"pendente"
@@ -269,7 +270,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   const {error:closeError}=await supabase.from("payment_periods").update({status:"fechado"}).eq("id",period.id);
   if(closeError)throw closeError;
   await refresh();
-},[workers,attendance,refresh]);
+},[workers,attendance,paymentPeriods,payments,refresh]);
 
  const markReceived=useCallback(async(id:string)=>{const {error}=await supabase.from("receivables").update({status:"recebido",received_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const addDailyAllowance=useCallback(async(input:{worker_id:string;date:string;amount?:number;method:PaymentMethod;notes?:string|null})=>{
@@ -361,7 +362,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
  const today=new Date();
  const todayISO=toISO(today);
  const [yy,mm]=todayISO.split("-").map(Number);
- const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — pagamento"},{date:`${yy}-${String(mm).padStart(2,"0")}-20`,label:"Dia 20 — adiantamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — pagamento"}];
+ const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — pagamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — pagamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
  const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0),paidAllowances=dailyAllowances.reduce((s,a)=>s+Number(a.amount||0),0);
  const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
