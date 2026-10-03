@@ -56,38 +56,12 @@ const fifthBusinessDay = (month: string) => {
   return businessDay(year, monthNumber, 5);
 };
 
-const paymentCycles = (month: string) => {
-  const previous = shiftMonth(month, -1);
-  const next = shiftMonth(month, 1);
-  const fifthCurrent = fifthBusinessDay(month);
-  const fifthNext = fifthBusinessDay(next);
-
-  return [
-    {
-      key: "fifth-current",
-      cycle: "quinto_dia_util" as const,
-      label: "5º dia útil",
-      payDate: fifthCurrent,
-      start: monthToDate(previous, 21),
-      end: dateShift(fifthCurrent, -1),
-    },
-    {
-      key: "twentieth-current",
-      cycle: "dia_20" as const,
-      label: "Dia 20",
-      payDate: monthToDate(month, 20),
-      start: fifthCurrent,
-      end: monthToDate(month, 19),
-    },
-    {
-      key: "fifth-next",
-      cycle: "quinto_dia_util" as const,
-      label: "5º dia útil",
-      payDate: fifthNext,
-      start: monthToDate(month, 20),
-      end: dateShift(fifthNext, -1),
-    },
-  ];
+/** Único ciclo: próximo 5º dia útil (a partir de hoje). Acumula tudo que está em aberto até o dia anterior. */
+const nextPayCycle = () => {
+  const today = toISO(new Date());
+  let payDate = fifthBusinessDay(today.slice(0, 7));
+  if (payDate < today) payDate = fifthBusinessDay(nextMonth(today.slice(0, 7)));
+  return { key: "fifth", cycle: "quinto_dia_util" as const, label: "5º dia útil", payDate, end: dateShift(payDate, -1) };
 };
 
 const isWorked = (row?: Attendance) => row?.status === "presente";
@@ -127,6 +101,25 @@ function DiariasPage() {
     setMonth(now.slice(0, 7));
   }, []);
 
+  const attendanceByWorker = useMemo(() => {
+    const map = new Map<string, Attendance[]>();
+    attendance.forEach((row) => {
+      const rows = map.get(row.worker_id) ?? [];
+      rows.push(row);
+      map.set(row.worker_id, rows);
+    });
+    return map;
+  }, [attendance]);
+
+  /** Todas as diárias trabalhadas e ainda não pagas, de qualquer mês. */
+  const openRows = (worker: Worker) =>
+    (attendanceByWorker.get(worker.id) ?? []).filter((row) => isWorked(row) && !rowPaymentStatus(worker.id, row).paid);
+  const openByMonth = (worker: Worker) => {
+    const map = new Map<string, number>();
+    openRows(worker).forEach((row) => map.set(row.date.slice(0, 7), (map.get(row.date.slice(0, 7)) ?? 0) + attendanceAmount(worker, row)));
+    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([m, v]) => ({ month: m, amount: Math.round(v * 100) / 100 }));
+  };
+
   // Mês em que cada trabalhador tem registro (pela data real da diária, nunca pela data do pagamento).
   const monthsByWorker = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -144,9 +137,9 @@ function DiariasPage() {
       workers.filter(
         (worker) =>
           worker.employment_type === "diarista" &&
-          (worker.status !== "desligado" || hasRecordIn(worker.id)),
+          (worker.status !== "desligado" || hasRecordIn(worker.id) || (attendanceByWorker.get(worker.id) ?? []).some((row) => isWorked(row) && !rowPaymentStatus(worker.id, row).paid)),
       ),
-    [workers, month, monthsByWorker],
+    [workers, month, monthsByWorker, attendanceByWorker, payments, paymentPeriods],
   );
 
   const selectedWorker = workers.find((worker) => worker.id === selectedWorkerId) ?? null;
@@ -154,9 +147,13 @@ function DiariasPage() {
   // Situação de pagamento de cada diária: baixa individual ou incluída em um fechamento.
   const rowPaymentStatus = (workerId: string, row: Attendance) => {
     if (row.paid_at) return { paid: true, label: `Paga em ${formatDate(row.paid_at)}` };
-    const period = paymentPeriods.find((p) => row.date >= p.start_date && row.date <= p.end_date && payments.some((x) => x.period_id === p.id && x.worker_id === workerId));
-    const payment = period ? payments.find((x) => x.period_id === period.id && x.worker_id === workerId) : null;
-    if (payment?.status === "pago") return { paid: true, label: payment.paid_at ? `Paga em ${formatDate(payment.paid_at)}` : "Paga" };
+    const covering = paymentPeriods
+      .filter((p) => row.date >= p.start_date && row.date <= p.end_date)
+      .map((p) => payments.find((x) => x.period_id === p.id && x.worker_id === workerId))
+      .filter((x): x is NonNullable<typeof x> => Boolean(x));
+    const paidPayment = covering.find((x) => x.status === "pago");
+    if (paidPayment) return { paid: true, label: paidPayment.paid_at ? `Paga em ${formatDate(paidPayment.paid_at)}` : "Paga" };
+    const payment = covering[0];
     if (payment) return { paid: false, label: "Fechada · aguardando pagamento" };
     return { paid: false, label: "Pendente" };
   };
@@ -165,16 +162,6 @@ function DiariasPage() {
     const custom = row.daily_amount == null || String(row.daily_amount) === "" ? NaN : Number(row.daily_amount);
     return Number.isFinite(custom) ? custom : Number(worker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
   };
-
-  const attendanceByWorker = useMemo(() => {
-    const map = new Map<string, Attendance[]>();
-    attendance.forEach((row) => {
-      const rows = map.get(row.worker_id) ?? [];
-      rows.push(row);
-      map.set(row.worker_id, rows);
-    });
-    return map;
-  }, [attendance]);
 
   const getMonthRows = (worker: Worker, targetMonth: string) =>
     (attendanceByWorker.get(worker.id) ?? []).filter(
@@ -190,7 +177,7 @@ function DiariasPage() {
         worker,
         rows,
         days,
-        amount: Math.round(rows.filter((row) => !row.paid_at).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
+        amount: Math.round(openRows(worker).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
         total: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
@@ -243,7 +230,10 @@ function DiariasPage() {
     );
   };
 
-  const totalMonth = monthData.reduce((sum, row) => sum + row.amount, 0);
+  const totalOpen = monthData.reduce((sum, row) => sum + row.amount, 0);
+  const fixedOpen = payments
+    .filter((p) => p.status === "pendente" && workers.find((w) => w.id === p.worker_id)?.employment_type === "contratado")
+    .reduce((sum, p) => sum + Number(p.gross_amount), 0);
 
   const detail = useMemo(() => {
     if (!selectedWorker || !month) return null;
@@ -251,9 +241,11 @@ function DiariasPage() {
     const allRows = (attendanceByWorker.get(selectedWorker.id) ?? []).filter(
       (row) => row.date.startsWith(month),
     );
-    const rows = allRows.filter((row) => isWorked(row) && !row.paid_at);
+    const rows = openRows(selectedWorker);
     const rowMap = new Map(allRows.map((row) => [row.date, row]));
-    const cycles = paymentCycles(month);
+    const next = nextPayCycle();
+    const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
+    const cycles = [{ ...next, start: earliest < next.end ? earliest : next.end }];
 
     const sumRows = (items: Attendance[]) => {
       const days = items.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
@@ -266,7 +258,7 @@ function DiariasPage() {
     const cycleData = cycles
       .map((cycle) => ({
         ...cycle,
-        rows: rows.filter((row) => row.date >= cycle.start && row.date <= cycle.end),
+        rows: rows.filter((row) => row.date <= cycle.end),
       }))
       .map((cycle) => ({
         ...cycle,
@@ -286,12 +278,13 @@ function DiariasPage() {
       rowMap,
       rows,
       cycles: cycleData,
-      totalDays: cycleData.reduce((sum, cycle) => sum + cycle.days, 0),
-      totalAmount: cycleData.reduce((sum, cycle) => sum + cycle.amount, 0),
+      totalDays: sumRows(rows).days,
+      totalAmount: sumRows(rows).amount,
+      byMonth: openByMonth(selectedWorker),
       daysInMonth,
       firstWeekday,
     };
-  }, [selectedWorker, month, attendanceByWorker]);
+  }, [selectedWorker, month, attendanceByWorker, payments, paymentPeriods]);
 
   if (!month) {
     return (
@@ -360,25 +353,35 @@ function DiariasPage() {
 
         <div className="mb-4 grid grid-cols-2 gap-2">
           <Card className="p-3">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Dias</p>
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Dias em aberto</p>
             <p className="font-display text-2xl font-semibold">
               {detail.totalDays.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}
             </p>
           </Card>
           <Card className="p-3">
-            <p className="text-[10px] font-semibold uppercase text-muted-foreground">A receber</p>
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Total a pagar</p>
             <p className="font-display text-2xl font-semibold text-primary-deep">{brl(detail.totalAmount)}</p>
           </Card>
         </div>
+        {detail.byMonth.length ? (
+          <Card className="mb-4 p-3">
+            <p className="text-xs font-semibold">Em aberto por mês (todos os meses)</p>
+            <div className="mt-1 divide-y divide-border">
+              {detail.byMonth.map((m) => (
+                <div key={m.month} className="flex justify-between py-1.5 text-xs">
+                  <span className="capitalize">{monthTitle(m.month)}</span>
+                  <span className="font-semibold">{brl(m.amount)}</span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <div className="mb-4 space-y-2">
           {detail.cycles.map((cycle) => {
             const period = paymentPeriods.find(
               (p) =>
-                p.cycle === cycle.cycle &&
-                p.start_date === cycle.start &&
-                p.end_date === cycle.end &&
-                p.pay_date === cycle.payDate,
+                p.cycle === "quinto_dia_util" && p.pay_date === cycle.payDate,
             );
             const workerPayment = period
               ? payments.find((p) => p.period_id === period.id && p.worker_id === selectedWorker.id)
@@ -397,7 +400,7 @@ function DiariasPage() {
                       Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados neste período
+                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}
                     </p>
                   </div>
                   <p className="shrink-0 font-display text-xl font-semibold text-primary-deep">{brl(cycle.amount)}</p>
@@ -828,8 +831,9 @@ function DiariasPage() {
             <p className="text-sm font-semibold capitalize">{monthTitle(month)}</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Total acumulado</p>
-            <p className="text-sm font-bold text-primary-deep">{brl(totalMonth)}</p>
+            <p className="text-[10px] text-muted-foreground">Total de diárias em aberto</p>
+            <p className="text-sm font-bold text-primary-deep">{brl(totalOpen)}</p>
+            {fixedOpen > 0 ? <p className="text-[10px] text-muted-foreground">Fixos pendentes: {brl(fixedOpen)}</p> : null}
           </div>
         </div>
         <div className="mt-3 border-t border-border pt-3">
@@ -893,7 +897,7 @@ function DiariasPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm font-bold text-primary-deep">{brl(item.amount)}</p>
-                <p className="text-[10px] text-muted-foreground">a receber · {brl(item.total)} no mês</p>
+                <p className="text-[10px] text-muted-foreground">em aberto (todos os meses) · {brl(item.total)} em {monthTitle(month).split(" ")[0]}</p>
               </div>
               <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
             </button>
@@ -962,9 +966,9 @@ function DiariasPage() {
       <Card className="mt-4 p-3">
         <p className="text-xs font-semibold">Como o pagamento é calculado</p>
         <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
-          <p>• O 5º dia útil paga do dia 21 do mês anterior até o dia anterior ao pagamento.</p>
-          <p>• O dia 20 paga do último 5º dia útil até o dia 19.</p>
-          <p>• Os períodos são contínuos: cada dia trabalhado entra em um único pagamento.</p>
+          <p>• Pagamento único: todo 5º dia útil do mês.</p>
+          <p>• Entram todas as diárias em aberto até o dia anterior ao pagamento, de qualquer mês.</p>
+          <p>• Diária não paga continua no total em aberto até ser paga; o mês só filtra o histórico.</p>
           <p>• Dia integral = 1 diária · meio período = 0,5 diária.</p>
         </div>
       </Card>
