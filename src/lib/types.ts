@@ -111,3 +111,22 @@ export interface ServiceOrder {
   notes: string | null; location: string | null; created_by: UUID | null; created_at: string; updated_at: string; completed_at: string | null;
   service_type?: ServiceType; contract?: Contract | null; team?: Team | null; items?: ServiceOrderItem[];
 }
+
+export interface ProductionGoal {
+  id: UUID;
+  month: string;
+  target_m2: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductionGoalWeek {
+  id: UUID;
+  goal_id: UUID;
+  week_number: number;
+  start_date: ISODate;
+  end_date: ISODate;
+  target_m2: number;
+  created_at: string;
+  updated_at: string;
+}

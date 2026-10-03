@@ -15,6 +15,7 @@ import {
   Users,
   Wallet,
   ClipboardList,
+  Target,
 } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
@@ -26,6 +27,7 @@ const navItems = [
   { to: "/os", label: "O.S.", icon: ClipboardList },
   { to: "/financeiro", label: "Financeiro", icon: BarChart3 },
   { to: "/equipe", label: "Equipe", icon: Users },
+  { to: "/metas", label: "Metas", icon: Target },
 ] as const;
 
 export function AppShell({
