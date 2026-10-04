@@ -79,7 +79,6 @@ function DiariasPage() {
   const [payingAttendanceId, setPayingAttendanceId] = useState<string | null>(null);
   const [dailyAmountInput, setDailyAmountInput] = useState("");
   const [savingDailyAmount, setSavingDailyAmount] = useState(false);
-  const [calendarTouchStart, setCalendarTouchStart] = useState<{ x: number; y: number } | null>(null);
 
   const availableMonths = useMemo(() => {
     const currentMonth = toISO(new Date()).slice(0, 7);
@@ -512,44 +511,13 @@ function DiariasPage() {
             </div>
           </div>
 
-          <div className="mb-3 rounded-lg border bg-muted/20 px-3 py-2 text-center">
-            <p className="text-base font-bold capitalize">{monthTitle(month)}</p>
-          </div>
-
           <div className="mb-2 grid grid-cols-7 text-center text-[9px] font-semibold uppercase text-muted-foreground">
             {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((day) => (
               <span key={day}>{day}</span>
             ))}
           </div>
 
-          <div
-            className="grid grid-cols-7 gap-1"
-            style={{ touchAction: "pan-y" }}
-            onTouchStart={(event) => {
-              const touch = event.changedTouches[0];
-              if (touch) setCalendarTouchStart({ x: touch.clientX, y: touch.clientY });
-            }}
-            onTouchEnd={(event) => {
-              const start = calendarTouchStart;
-              setCalendarTouchStart(null);
-              if (!start) return;
-
-              const touch = event.changedTouches[0];
-              if (!touch) return;
-
-              const dx = touch.clientX - start.x;
-              const dy = touch.clientY - start.y;
-              const horizontalDistance = Math.abs(dx);
-              const verticalDistance = Math.abs(dy);
-
-              // Só troca o mês quando for claramente um gesto horizontal.
-              // Movimentos verticais continuam rolando a página normalmente.
-              if (horizontalDistance < 55 || horizontalDistance < verticalDistance * 1.25) return;
-
-              setMonth(shiftMonth(month, dx < 0 ? 1 : -1));
-            }}
-            onTouchCancel={() => setCalendarTouchStart(null)}
-          >
+          <div className="grid grid-cols-7 gap-1">
             {Array.from({ length: detail.firstWeekday }).map((_, index) => (
               <div key={`empty-${index}`} className="min-h-14 rounded-lg bg-muted/30" />
             ))}
@@ -918,20 +886,22 @@ function DiariasPage() {
               key={item.worker.id}
               type="button"
               onClick={() => setSelectedWorkerId(item.worker.id)}
-              className="card-surface flex w-full items-center gap-3 p-3 text-left transition-transform active:scale-[0.99]"
+              className="card-surface grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 p-3 text-left transition-transform active:scale-[0.99]"
             >
               <Avatar text={initials(item.worker.full_name)} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{item.worker.full_name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="break-words text-sm font-semibold leading-tight">{item.worker.full_name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {item.worker.job_role} · {item.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados
                 </p>
               </div>
-              <div className="text-right">
+              <div className="flex shrink-0 items-center gap-2 text-right">
                 <p className="text-sm font-bold text-primary-deep">{brl(item.amount)}</p>
-                <p className="text-[10px] text-muted-foreground">em aberto (todos os meses) · {brl(item.total)} em {monthTitle(month).split(" ")[0]}</p>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </div>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              <p className="col-start-2 col-end-4 text-[10px] leading-4 text-muted-foreground">
+                Em aberto (todos os meses) · {brl(item.total)} em {monthTitle(month).split(" ")[0]}
+              </p>
             </button>
           ))}
         </div>

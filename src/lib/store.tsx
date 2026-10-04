@@ -344,30 +344,6 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    if(error)throw error;
    await refresh();
  },[refresh,serviceOrders]);
-
- const saveProductionGoal=useCallback(async(input:{month:string;target_m2:number;weeks:{week_number:number;start_date:string;end_date:string;target_m2:number}[]})=>{
-   const target=Math.round(Number(input.target_m2)*100)/100;
-   if(!/^\\d{4}-\\d{2}$/.test(input.month)||!Number.isFinite(target)||target<=0)throw new Error("Informe uma meta mensal válida.");
-   if(!input.weeks.length)throw new Error("A meta precisa ter pelo menos uma semana.");
-   const weekTotal=Math.round(input.weeks.reduce((sum,w)=>sum+Number(w.target_m2||0),0)*100)/100;
-   if(Math.abs(weekTotal-target)>0.01)throw new Error("A soma das metas semanais precisa ser igual à meta mensal.");
-   if(input.weeks.some(w=>!Number.isFinite(Number(w.target_m2))||Number(w.target_m2)<0||!w.start_date||!w.end_date))throw new Error("Há uma meta semanal inválida.");
-   const {data:goal,error}=await supabase.from("production_goals").upsert({month:input.month,target_m2:target,updated_at:new Date().toISOString()},{onConflict:"month"}).select("*").single();
-   if(error)throw error;
-   const {error:deleteError}=await supabase.from("production_goal_weeks").delete().eq("goal_id",goal.id);
-   if(deleteError)throw deleteError;
-   const {error:insertError}=await supabase.from("production_goal_weeks").insert(input.weeks.map(w=>({goal_id:goal.id,week_number:w.week_number,start_date:w.start_date,end_date:w.end_date,target_m2:Math.round(Number(w.target_m2)*100)/100})));
-   if(insertError)throw insertError;
-   await refresh();
- },[refresh]);
- const deleteProductionGoal=useCallback(async(month:string)=>{
-   const goal=productionGoals.find(g=>g.month===month);
-   if(!goal)return;
-   const {error}=await supabase.from("production_goals").delete().eq("id",goal.id);
-   if(error)throw error;
-   await refresh();
- },[productionGoals,refresh]);
-
  const deleteServiceOrder=useCallback(async(id:string)=>{
    const {error}=await supabase.rpc("delete_service_order",{p_service_order_id:id});
    if(error)throw error;
@@ -389,13 +365,35 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
    if(error)throw error;
    await refresh();
  },[serviceOrders,refresh]);
+ const saveProductionGoal=useCallback(async(input:{month:string;target_m2:number;weeks:{week_number:number;start_date:string;end_date:string;target_m2:number}[]})=>{
+   const target=Math.round(Number(input.target_m2)*100)/100;
+   if(!/^\d{4}-\d{2}$/.test(input.month)||!Number.isFinite(target)||target<=0)throw new Error("Informe uma meta mensal válida.");
+   if(!input.weeks.length)throw new Error("A meta precisa ter pelo menos uma semana.");
+   const weekTotal=Math.round(input.weeks.reduce((sum,w)=>sum+Number(w.target_m2),0)*100)/100;
+   if(Math.abs(weekTotal-target)>0.001)throw new Error("A soma das metas semanais precisa ser igual à meta mensal.");
+   if(input.weeks.some(w=>!Number.isFinite(Number(w.target_m2))||Number(w.target_m2)<0||!w.start_date||!w.end_date))throw new Error("Há uma meta semanal inválida.");
+   const {data:goal,error}=await supabase.from("production_goals").upsert({month:input.month,target_m2:target,updated_at:new Date().toISOString()},{onConflict:"month"}).select("*").single();
+   if(error)throw error;
+   const {error:deleteError}=await supabase.from("production_goal_weeks").delete().eq("goal_id",goal.id);
+   if(deleteError)throw deleteError;
+   const {error:insertError}=await supabase.from("production_goal_weeks").insert(input.weeks.map(w=>({goal_id:goal.id,week_number:w.week_number,start_date:w.start_date,end_date:w.end_date,target_m2:Math.round(Number(w.target_m2)*100)/100})));
+   if(insertError)throw insertError;
+   await refresh();
+ },[refresh]);
+ const deleteProductionGoal=useCallback(async(month:string)=>{
+   const goal=productionGoals.find(g=>g.month===month);
+   if(!goal)return;
+   const {error}=await supabase.from("production_goals").delete().eq("id",goal.id);
+   if(error)throw error;
+   await refresh();
+ },[productionGoals,refresh]);
  const today=new Date();
  const todayISO=toISO(today);
  const [yy,mm]=todayISO.split("-").map(Number);
  const candidates=[{date:businessDay(yy,mm,5),label:"5º dia útil — pagamento"},{date:businessDay(mm===12?yy+1:yy,mm===12?1:mm+1,5),label:"5º dia útil — pagamento"}];
  const next=candidates.find(c=>daysUntil(c.date,today)>=0)||candidates[2]!;
  const paidIn=receivables.filter(r=>r.status==="recebido").reduce((s,r)=>s+r.expected_amount,0),paidOut=payables.filter(p=>p.status==="pago").reduce((s,p)=>s+p.amount,0),paidWorkers=payments.filter(p=>p.status==="pago").reduce((s,p)=>s+p.gross_amount,0),paidAllowances=dailyAllowances.reduce((s,a)=>s+Number(a.amount||0),0);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,deleteAttendance,next.date,next.label]);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal,deleteAttendance,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}

@@ -1,0 +1,2 @@
+- [x] Corrigir a exibição dos nomes na lista de Diárias.
+- [x] Corrigir validação, semanas de segunda a sábado e persistência em Metas de Produção.
