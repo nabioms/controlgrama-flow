@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronLeft, ChevronRight, Pencil, Plus, Target, TrendingUp, X, CalendarDays } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Pencil, Target, TrendingUp, X, CalendarDays } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
@@ -87,6 +87,7 @@ function MetasPage(){
   const [editing,setEditing]=useState(false);
   const [targetInput,setTargetInput]=useState("");
   const [weekInputs,setWeekInputs]=useState<Record<number,string>>({});
+  const [fixedWeeks,setFixedWeeks]=useState<Set<number>>(new Set());
   const [error,setError]=useState("");
 
   const goal=productionGoals.find(g=>g.month===month)||null;
@@ -112,16 +113,51 @@ function MetasPage(){
     const distributed=distributeTarget(Number(goal?.target_m2||0),Math.max(1,weeks.length));
     setTargetInput(defaultTarget?String(defaultTarget):"");
     setWeekInputs(Object.fromEntries(weeks.map((w,index)=>[w.week_number,String(savedWeeks.find(x=>x.week_number===w.week_number)?.target_m2??distributed[index]??0)])));
+    setFixedWeeks(new Set());
     setEditing(true);setError("");
   };
   const changeTarget=(value:string)=>{
     setTargetInput(value);
+    setFixedWeeks(new Set());
     const n=parseM2(value);
     if(Number.isFinite(n)&&n>0){
       const distributed=distributeTarget(n,weeks.length);
       setWeekInputs(Object.fromEntries(weeks.map((w,index)=>[w.week_number,String(distributed[index]??0)])));
+      setError("");
     }
   };
+  const changeWeek=(weekNumber:number,value:string)=>{
+    setWeekInputs(current=>{
+      const nextFixed=new Set(fixedWeeks);
+      nextFixed.add(weekNumber);
+      setFixedWeeks(nextFixed);
+      const next={...current,[weekNumber]:value};
+      const targetValue=parseM2(targetInput);
+      const fixedValues=weeks
+        .filter(w=>nextFixed.has(w.week_number))
+        .map(w=>parseM2(next[w.week_number]||"0"));
+      const fixedSum=fixedValues.every(Number.isFinite)?fixedValues.reduce((sum,v)=>sum+v,0):NaN;
+      const unfixed=weeks.filter(w=>!nextFixed.has(w.week_number));
+      if(Number.isFinite(targetValue)&&targetValue>0&&Number.isFinite(fixedSum)){
+        const remainingTarget=targetValue-fixedSum;
+        if(unfixed.length>0&&remainingTarget>=0){
+          const distributed=distributeTarget(remainingTarget,unfixed.length);
+          unfixed.forEach((w,index)=>{next[w.week_number]=String(distributed[index]??0);});
+          setError("");
+        }else if(remainingTarget<0){
+          unfixed.forEach(w=>{next[w.week_number]="0";});
+          setError("As semanas fixadas ultrapassam a meta mensal. Reduza algum valor fixado para poder fechar a meta.");
+        }else{
+          setError("");
+        }
+      }
+      return next;
+    });
+  };
+  const totalDistributed=weeks.reduce((sum,w)=>{
+    const value=parseM2(weekInputs[w.week_number]||"");
+    return Number.isFinite(value)?sum+value:sum;
+  },0);
   const save=async()=>{
     try{
       setError("");
@@ -179,9 +215,9 @@ function MetasPage(){
 
     {editing?<div className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 p-3 sm:items-center">
       <Card className="max-h-[90vh] w-full max-w-xl overflow-auto p-4">
-        <div className="flex items-center justify-between gap-3"><div><p className="text-lg font-semibold">Configurar meta</p><p className="text-xs text-muted-foreground">A meta mensal será distribuída igualmente nas semanas. Você pode ajustar cada semana.</p></div><button onClick={()=>setEditing(false)} className="rounded-lg p-2"><X className="size-4"/></button></div>
+        <div className="flex items-center justify-between gap-3"><div><p className="text-lg font-semibold">Configurar meta</p><p className="text-xs text-muted-foreground">A meta mensal é distribuída igualmente nas semanas. Ao alterar uma semana, ela fica fixa e o restante é redistribuído entre as outras.</p></div><button onClick={()=>setEditing(false)} className="rounded-lg p-2"><X className="size-4"/></button></div>
         <label className="mt-4 block text-xs font-semibold">Meta do mês (m²)<input className="input mt-1" inputMode="decimal" value={targetInput} onChange={e=>changeTarget(e.target.value)} placeholder="Ex.: 65000"/></label>
-        <div className="mt-4 rounded-xl border p-3"><div className="mb-3 flex items-center gap-2"><CalendarDays className="size-4 text-primary"/><p className="text-sm font-semibold">Distribuição semanal</p></div><div className="space-y-2">{weeks.map(w=><label key={w.week_number} className="grid grid-cols-[1fr_150px] items-center gap-3 rounded-xl bg-muted/40 p-3 text-xs"><span><strong>Semana {w.week_number}</strong><br/><span className="text-muted-foreground">{w.start_date.slice(8,10)}/{w.start_date.slice(5,7)} — {w.end_date.slice(8,10)}/{w.end_date.slice(5,7)}</span></span><input className="input" inputMode="decimal" value={weekInputs[w.week_number]||""} onChange={e=>setWeekInputs(x=>({...x,[w.week_number]:e.target.value}))}/></label>)}</div><p className="mt-3 text-[11px] text-muted-foreground">Total distribuído: <strong>{formatM2(weeks.reduce((s,w)=>s+parseM2(weekInputs[w.week_number]||"0"),0))} m²</strong> de {formatM2(parseM2(targetInput))} m²</p></div>
+        <div className="mt-4 rounded-xl border p-3"><div className="mb-3 flex items-center gap-2"><CalendarDays className="size-4 text-primary"/><p className="text-sm font-semibold">Distribuição semanal</p></div><div className="space-y-2">{weeks.map(w=><label key={w.week_number} className="grid grid-cols-[1fr_150px] items-center gap-3 rounded-xl bg-muted/40 p-3 text-xs"><span><strong>Semana {w.week_number}</strong><br/><span className="text-muted-foreground">{w.start_date.slice(8,10)}/{w.start_date.slice(5,7)} — {w.end_date.slice(8,10)}/{w.end_date.slice(5,7)}</span></span><input className="input" inputMode="decimal" value={weekInputs[w.week_number]||""} onChange={e=>changeWeek(w.week_number,e.target.value)}/></label>)}</div><p className="mt-3 text-[11px] text-muted-foreground">Total distribuído: <strong>{formatM2(totalDistributed)} m²</strong> de {formatM2(parseM2(targetInput))} m²</p></div>
         {error&&<p className="mt-3 text-xs font-semibold text-destructive">{error}</p>}
         <div className="mt-4 grid grid-cols-2 gap-2"><Button onClick={save}>Salvar meta</Button><Button variant="outline" onClick={()=>setEditing(false)}>Cancelar</Button></div>
         {hasGoal?<button className="mt-3 w-full text-xs font-semibold text-destructive" onClick={async()=>{if(window.confirm("Excluir a meta deste mês?")){await deleteProductionGoal(month);setEditing(false);}}}>Excluir meta deste mês</button>:null}
