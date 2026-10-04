@@ -886,20 +886,22 @@ function DiariasPage() {
               key={item.worker.id}
               type="button"
               onClick={() => setSelectedWorkerId(item.worker.id)}
-              className="card-surface flex w-full items-center gap-3 p-3 text-left transition-transform active:scale-[0.99]"
+              className="card-surface grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 p-3 text-left transition-transform active:scale-[0.99]"
             >
               <Avatar text={initials(item.worker.full_name)} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{item.worker.full_name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="break-words text-sm font-semibold leading-tight">{item.worker.full_name}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {item.worker.job_role} · {item.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias trabalhados
                 </p>
               </div>
-              <div className="text-right">
+              <div className="flex shrink-0 items-center gap-2 text-right">
                 <p className="text-sm font-bold text-primary-deep">{brl(item.amount)}</p>
-                <p className="text-[10px] text-muted-foreground">em aberto (todos os meses) · {brl(item.total)} em {monthTitle(month).split(" ")[0]}</p>
+                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </div>
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+              <p className="col-start-2 col-end-4 text-[10px] leading-4 text-muted-foreground">
+                Em aberto (todos os meses) · {brl(item.total)} em {monthTitle(month).split(" ")[0]}
+              </p>
             </button>
           ))}
         </div>
