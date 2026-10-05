@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -79,6 +79,7 @@ function DiariasPage() {
   const [payingAttendanceId, setPayingAttendanceId] = useState<string | null>(null);
   const [dailyAmountInput, setDailyAmountInput] = useState("");
   const [savingDailyAmount, setSavingDailyAmount] = useState(false);
+  const calendarTouchStartX = useRef<number | null>(null);
 
   const availableMonths = useMemo(() => {
     const currentMonth = toISO(new Date()).slice(0, 7);
@@ -318,39 +319,6 @@ function DiariasPage() {
           </div>
         </Card>
 
-        <div className="mb-4 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setMonth(shiftMonth(month, -1))}
-            className="rounded-xl border border-border p-2"
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft className="size-4" />
-          </button>
-          <div className="min-w-0 text-center">
-            <label className="sr-only" htmlFor="diarias-detail-month">Mês do histórico</label>
-            <select
-              id="diarias-detail-month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-              className="max-w-[190px] rounded-lg border border-border bg-card px-2 py-1 text-sm font-semibold capitalize outline-none focus:border-primary"
-            >
-              {availableMonths.map((item) => (
-                <option key={item} value={item}>{monthTitle(item)}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">Histórico por mês</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMonth(shiftMonth(month, 1))}
-            className="rounded-xl border border-border p-2"
-            aria-label="Próximo mês"
-          >
-            <ChevronRight className="size-4" />
-          </button>
-        </div>
-
         <div className="mb-4 grid grid-cols-2 gap-2">
           <Card className="p-3">
             <p className="text-[10px] font-semibold uppercase text-muted-foreground">Dias em aberto</p>
@@ -504,12 +472,51 @@ function DiariasPage() {
 
         <Card className="mb-4 p-3">
           <div className="mb-3 flex items-center gap-2">
-            <CalendarDays className="size-4 text-primary" />
-            <div>
+            <CalendarDays className="size-4 shrink-0 text-primary" />
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Calendário de trabalho</p>
               <p className="text-[11px] text-muted-foreground">Azul = realizada · Verde = paga · Vermelho = falta.</p>
             </div>
           </div>
+
+          <div className="mb-3 flex items-center justify-between gap-2 rounded-xl border border-border bg-muted/20 p-2">
+            <button
+              type="button"
+              onClick={() => setMonth(shiftMonth(month, -1))}
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-foreground transition active:scale-95"
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+            <div className="min-w-0 text-center">
+              <p className="truncate text-sm font-bold capitalize">{monthTitle(month)}</p>
+              <p className="text-[10px] text-muted-foreground">Deslize o calendário para trocar o mês</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMonth(shiftMonth(month, 1))}
+              className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-foreground transition active:scale-95"
+              aria-label="Próximo mês"
+            >
+              <ChevronRight className="size-4" />
+            </button>
+          </div>
+
+          <div
+            className="touch-pan-y"
+            onTouchStart={(event) => {
+              calendarTouchStartX.current = event.touches[0]?.clientX ?? null;
+            }}
+            onTouchEnd={(event) => {
+              const startX = calendarTouchStartX.current;
+              const endX = event.changedTouches[0]?.clientX;
+              calendarTouchStartX.current = null;
+              if (startX == null || endX == null) return;
+              const deltaX = endX - startX;
+              if (Math.abs(deltaX) < 50) return;
+              setMonth((current) => shiftMonth(current, deltaX < 0 ? 1 : -1));
+            }}
+          >
 
           <div className="mb-2 grid grid-cols-7 text-center text-[9px] font-semibold uppercase text-muted-foreground">
             {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((day) => (
