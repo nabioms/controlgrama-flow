@@ -15,6 +15,7 @@ import { Plus, Trash2, WalletCards } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, Field, Input, SectionTitle, Select, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
+import { BonusHistory } from "@/components/BonusPanel";
 
 import { brl, formatDate, monthLabel, shortBrl, toISO } from "@/lib/format";
 import type { ExpenseCategoryKey } from "@/lib/types";
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/financeiro")({
   component: FinanceiroPage,
 });
 
-const tabs = ["Resumo", "Receber", "Pagar", "Ajuda de custo", "Notas"] as const;
+const tabs = ["Resumo", "Receber", "Pagar", "Ajuda de custo", "Bônus Meta Semanal", "Notas"] as const;
 
 function FinanceiroPage() {
   const { receivables, payables, payments, dailyAllowances, workers, attendance, markReceived, markPayablePaid, addPayable, addDailyAllowance, deleteDailyAllowance, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
@@ -334,6 +335,8 @@ function FinanceiroPage() {
           </div>
         </>
       ) : null}
+
+      {tab === "Bônus Meta Semanal" ? <BonusHistory /> : null}
 
       {tab === "Ajuda de custo" ? (
         <>

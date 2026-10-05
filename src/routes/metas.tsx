@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { Badge, Button, Card, EmptyState, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
 import { toISO } from "@/lib/format";
+import { BonusHistory, WeekBonusCard, useBonusEvaluations } from "@/components/BonusPanel";
 
 export const Route = createFileRoute("/metas")({
   head: () => ({
@@ -172,6 +173,7 @@ function MetasPage(){
     }catch(e:any){setError(e?.message||"Não foi possível salvar a meta.");}
   };
   const hasGoal=Boolean(goal);
+  const bonusWeeks=useBonusEvaluations().filter(w=>w.week.goal_id===goal?.id);
   return <AppShell title="Metas de produção" subtitle="Acompanhe a meta de corte em m² por mês e por semana">
     <div className="mb-4 flex items-center justify-between gap-2">
       <button className="rounded-xl border p-2" onClick={()=>setMonth(shiftMonth(month,-1))} aria-label="Mês anterior"><ChevronLeft className="size-4"/></button>
@@ -207,6 +209,13 @@ function MetasPage(){
         </div>)}
       </div>
     </Card>:null}
+
+    {hasGoal?<Card className="mb-4">
+      <SectionTitle title="Bônus de meta semanal" hint="R$ 100 por diarista sem falta quando a meta da semana é batida. Toque na semana para ver os detalhes."/>
+      <div className="space-y-2">{bonusWeeks.map(w=><WeekBonusCard key={w.week.id} w={w}/>)}</div>
+    </Card>:null}
+
+    <BonusHistory/>
 
     <div className="mb-4 grid grid-cols-2 gap-2">
       <StatCard label="Realizado" value={`${formatM2(realized)} m²`} sub="O.S. finalizadas" tone="success" icon={<CheckCircle2 className="size-4"/>}/>
