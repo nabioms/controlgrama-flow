@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, CalendarClock, Ruler, Users, ClipboardList }
 import { AppShell } from "@/components/AppShell";
 import { Badge, Card, ProgressBar, SectionTitle, StatCard } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
+import { DashboardBonus } from "@/components/BonusPanel";
 
 import { brl, daysUntil, formatDate, formatLongDate, toISO } from "@/lib/format";
 
@@ -243,6 +244,7 @@ function Dashboard() {
           </div>
         ))}
       </div>
+      <DashboardBonus />
     </AppShell>
   );
 }

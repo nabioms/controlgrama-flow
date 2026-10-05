@@ -130,3 +130,25 @@ export interface ProductionGoalWeek {
   created_at: string;
   updated_at: string;
 }
+
+export interface WeeklyGoalBonus {
+  id: UUID;
+  worker_id: UUID;
+  team_id: UUID | null;
+  goal_week_id: UUID | null;
+  week_number: number;
+  week_start: ISODate;
+  week_end: ISODate;
+  week_target_m2: number;
+  realized_m2: number;
+  percent: number;
+  goal_met: boolean;
+  presence_ok: boolean;
+  amount: number;
+  status: "pendente" | "pago";
+  paid_at: ISODate | null;
+  method: PaymentMethod | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
