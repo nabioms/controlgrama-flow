@@ -580,6 +580,7 @@ function DiariasPage() {
               );
             })}
           </div>
+          </div>
         </Card>
 
         <p className="text-xs text-muted-foreground">
