@@ -10,7 +10,6 @@ import {
   LogOut,
   Moon,
   Sun,
-  Sprout,
   UserRound,
   Users,
   Wallet,
@@ -70,8 +69,12 @@ export function AppShell({
               className="group flex min-w-0 items-center gap-2.5"
               onClick={() => setAccountOpen(false)}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/12 ring-1 ring-white/15">
-                <Sprout className="size-5" />
+              <span className="flex size-9 shrink-0 items-center justify-center">
+                <img
+                  src="/controlgrama-login-mark.svg"
+                  alt="ControlGrama"
+                  className="size-9 object-contain"
+                />
               </span>
               <span className="truncate text-sm font-bold tracking-tight sm:text-base">
                 ControlGrama
