@@ -69,12 +69,22 @@ export function AppShell({
               className="group flex min-w-0 items-center gap-2.5"
               onClick={() => setAccountOpen(false)}
             >
-              <span className="flex size-9 shrink-0 items-center justify-center">
-                <img
-                  src="/controlgrama-login-mark.svg"
-                  alt="ControlGrama"
-                  className="size-9 object-contain"
-                />
+              <span className="flex size-9 shrink-0 items-center justify-center" aria-label="ControlGrama">
+                <svg viewBox="0 0 320 320" className="size-9" role="img" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="controlgrama-header-gradient" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stopColor="#9CF52A" />
+                      <stop offset=".55" stopColor="#35D34A" />
+                      <stop offset="1" stopColor="#0D8F45" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="160" cy="160" r="132" fill="none" stroke="url(#controlgrama-header-gradient)" strokeWidth="42" strokeLinecap="round" strokeDasharray="690 145" transform="rotate(-42 160 160)" />
+                  <path d="M77 170L160 247L330 77" fill="none" stroke="url(#controlgrama-header-gradient)" strokeWidth="42" strokeLinecap="square" strokeLinejoin="miter" />
+                  <path d="M117 204C161 220 204 238 250 238C281 238 310 229 342 212C314 257 270 280 220 280C173 280 133 260 101 236Z" fill="url(#controlgrama-header-gradient)" />
+                  <path d="M146 155V108L174 83V182Z" fill="#F7FAF8" />
+                  <path d="M191 185V72L219 45V214Z" fill="#F7FAF8" />
+                  <path d="M236 216V35L264 8V245Z" fill="#F7FAF8" />
+                </svg>
               </span>
               <span className="truncate text-sm font-bold tracking-tight sm:text-base">
                 ControlGrama
