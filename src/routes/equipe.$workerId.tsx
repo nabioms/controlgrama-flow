@@ -138,7 +138,7 @@ function WorkerDetail() {
     <AppShell title={worker.full_name} subtitle={worker.job_role}>
       <Card className="mb-4">
         <div className="flex items-center gap-3">
-          <Avatar text={initials(worker.full_name)} className="size-14 text-base" />
+          <Avatar text={initials(worker.full_name)} imageUrl={worker.photo_url} className="size-14 text-base" />
           <div className="flex-1">
             <p className="font-display text-lg font-semibold">{worker.full_name}</p>
             <p className="text-xs text-muted-foreground">
