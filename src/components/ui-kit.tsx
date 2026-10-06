@@ -154,7 +154,7 @@ export function EmptyState({ text }: { text: string }) {
   );
 }
 
-export function Avatar({ text, className }: { text: string; className?: string }) {
+export function Avatar({ text, imageUrl, className }: { text: string; imageUrl?: string | null; className?: string }) {
   return (
     <span
       className={cn(
@@ -162,7 +162,7 @@ export function Avatar({ text, className }: { text: string; className?: string }
         className,
       )}
     >
-      {text}
+      {imageUrl ? <img src={imageUrl} alt="" className="size-full rounded-full object-cover" /> : text}
     </span>
   );
 }
