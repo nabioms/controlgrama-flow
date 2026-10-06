@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight, Plus, UserPlus, UsersRound } from "lucide-re
 import { AppShell } from "@/components/AppShell";
 import { Avatar, Badge, Button, Card, Field, Input, SectionTitle, Select } from "@/components/ui-kit";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { brl, initials, toISO } from "@/lib/format";
 import type { EmploymentType, Team, Worker, WorkerStatus } from "@/lib/types";
 
@@ -34,6 +35,7 @@ function EquipePage() {
     employment_type: "diarista" as EmploymentType, daily_rate: "110", salary: "", shirt_size: "", shoe_size: "", teamId: "",
   });
   const [teamForm, setTeamForm] = useState({ name: "", foremanWorkerId: "" });
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,9 +58,24 @@ function EquipePage() {
     if (!form.full_name.trim()) return;
     setSaving(true); setError("");
     try {
+      let photoUrl: string | null = null;
+      if (photoFile) {
+        if (!photoFile.type.startsWith("image/")) throw new Error("Selecione uma imagem válida.");
+        if (photoFile.size > 5 * 1024 * 1024) throw new Error("A imagem deve ter no máximo 5 MB.");
+        const extension = photoFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `workers/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from("worker-photos").upload(path, photoFile, {
+          cacheControl: "31536000",
+          contentType: photoFile.type,
+          upsert: false,
+        });
+        if (uploadError) throw uploadError;
+        const { data: publicData } = supabase.storage.from("worker-photos").getPublicUrl(path);
+        photoUrl = publicData.publicUrl;
+      }
       const w: Worker = {
         id: `w-${Date.now()}`, full_name: form.full_name.trim(), cpf: form.cpf, rg: "", phone: form.phone,
-        address: "", shirt_size: form.shirt_size.trim() || null, shoe_size: form.shoe_size.trim() || null, photo_url: null, job_role: form.job_role as Worker["job_role"],
+        address: "", shirt_size: form.shirt_size.trim() || null, shoe_size: form.shoe_size.trim() || null, photo_url: photoUrl, job_role: form.job_role as Worker["job_role"],
         employment_type: form.employment_type, status: "ativo",
         daily_rate: form.employment_type === "diarista" ? Number(form.daily_rate || 0) : null,
         salary: form.employment_type === "contratado" ? Number(form.salary || 0) : null,
@@ -70,6 +87,7 @@ function EquipePage() {
       await addWorker(w, form.teamId || null);
       setOpenWorker(false);
       setForm({ ...form, full_name: "", cpf: "", phone: "", shirt_size: "", shoe_size: "", teamId: "" });
+      setPhotoFile(null);
     } catch (e: any) {
       setError(e?.message || "Não foi possível cadastrar o funcionário.");
     } finally { setSaving(false); }
@@ -187,7 +205,7 @@ function EquipePage() {
                       <div className="mt-3 space-y-2">
                         {members.map((w) => (
                           <Link key={w.id} to="/equipe/$workerId" params={{ workerId: w.id }} className="flex items-center gap-3 rounded-xl border p-2 hover:bg-muted">
-                            <Avatar text={initials(w.full_name)} />
+                            <Avatar text={initials(w.full_name)} imageUrl={w.photo_url} />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-semibold">{w.full_name}</p>
                               <p className="text-xs text-muted-foreground">{w.job_role} · {w.phone || "telefone não informado"}</p>
@@ -231,6 +249,19 @@ function EquipePage() {
             <Card className="mb-4 space-y-3">
               <SectionTitle title="Novo funcionário" hint="Cadastre diarista ou CLT e, se desejar, já habilite em uma equipe." />
               <Field label="Nome completo"><Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></Field>
+              <Field label="Foto de perfil">
+                <div className="flex items-center gap-3">
+                  {photoFile ? (
+                    <img src={URL.createObjectURL(photoFile)} alt="Prévia da foto" className="size-16 rounded-full object-cover border" />
+                  ) : (
+                    <Avatar text={form.full_name ? initials(form.full_name) : "?"} />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <Input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
+                    <p className="mt-1 text-[11px] text-muted-foreground">JPG, PNG ou WebP · máximo 5 MB.</p>
+                  </div>
+                </div>
+              </Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="CPF"><Input value={form.cpf} onChange={(e) => setForm({ ...form, cpf: e.target.value })} /></Field>
                 <Field label="Telefone"><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="(67) 99999-9999" /></Field>
