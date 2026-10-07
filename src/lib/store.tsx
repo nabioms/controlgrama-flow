@@ -437,7 +437,7 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
   }
  },[weeklyBonuses]);
  const markBonusDismissed=useCallback(async(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>{
-  const {data,error}=await supabase.from("weekly_goal_bonuses").upsert({...input,status:"dispensado",paid_at:null,method:null,updated_at:new Date().toISOString()},{onConflict:"worker_id,week_start"}).select("*").single();
+  const {data,error}=await supabase.from("weekly_goal_bonuses").upsert({...input,status:"dispensado",paid_at:null,method:null,amount:0,updated_at:new Date().toISOString()},{onConflict:"worker_id,week_start"}).select("*").single();
   if(error)throw error;
   const row={...data,week_start:date(data.week_start),week_end:date(data.week_end),paid_at:date(data.paid_at),amount:Number(data.amount)} as WeeklyGoalBonus;
   setWeeklyBonuses(x=>[row,...x.filter(b=>!(b.worker_id===row.worker_id&&b.week_start===row.week_start))]);
