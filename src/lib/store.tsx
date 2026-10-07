@@ -245,6 +245,8 @@ export function StoreProvider({children}:{children:ReactNode}){
   const paidAt=toISO(new Date());
   const {data:updated,error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:paidAt}).eq("id",id).select("period_id").single();
   if(error)throw error;
+  const {error:bonusPayError}=await supabase.from("weekly_goal_bonuses").update({status:"pago",paid_at:paidAt,method:m,updated_at:new Date().toISOString()}).eq("worker_id",updated.worker_id).eq("status","bonificado");
+  if(bonusPayError)throw bonusPayError;
   const {data:remaining,error:remainingError}=await supabase.from("payments").select("id").eq("period_id",updated.period_id).neq("status","pago");
   if(remainingError)throw remainingError;
   if((remaining||[]).length===0){
@@ -276,8 +278,11 @@ export function StoreProvider({children}:{children:ReactNode}){
     const workedDays=attendance
       .filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at&&!covered(a))
       .reduce((sum,a)=>sum+Number(a.work_fraction??1),0);
-    if(!workedDays)continue;
-    const gross=attendance.filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at&&!covered(a)).reduce((sum,a)=>sum+attendanceAmount(a,w),0);
+    const workedRows=attendance.filter(a=>a.worker_id===w.id&&a.date>=input.start_date&&a.date<=input.end_date&&a.status==="presente"&&!a.paid_at&&!covered(a));
+    const dailyGross=workedRows.reduce((sum,a)=>sum+attendanceAmount(a,w),0);
+    const bonusGross=weeklyBonuses.filter(b=>b.worker_id===w.id&&b.status==="bonificado").reduce((sum,b)=>sum+Number(b.amount||0),0);
+    if(!workedDays && !bonusGross)continue;
+    const gross=dailyGross+bonusGross;
     const {error}=await supabase.from("payments").upsert({
       period_id:period.id,worker_id:w.id,worked_days:Math.round(workedDays*100)/100,
       daily_rate:w.daily_rate||0,gross_amount:Math.round(gross*100)/100,status:"pendente"
@@ -411,20 +416,33 @@ useCallback(async(id:string,patch:Partial<Pick<Team,"name"|"foreman_worker_id"|"
   const {data,error}=await supabase.from("bonus_settings").upsert({id:true,enabled:input.enabled,amount,require_presence:input.requirePresence,updated_at:new Date().toISOString()},{onConflict:"id"}).select("*").single();
   if(error)throw error; setBonusAmount(Number(data.amount));setBonusEnabled(Boolean(data.enabled));setBonusRequirePresence(Boolean(data.require_presence));
  },[]);
- const markBonusPaid=useCallback(async(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>{
-  // Único por diarista + semana: upsert nunca cria duplicata.
-  const {data,error}=await supabase.from("weekly_goal_bonuses").upsert({...input,status:"pago",paid_at:toISO(new Date()),updated_at:new Date().toISOString()},{onConflict:"worker_id,week_start"}).select("*").single();
+ const markBonusAwarded=useCallback(async(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>{
+  const existing=weeklyBonuses.find(b=>b.worker_id===input.worker_id&&b.week_start===input.week_start);
+  const {data,error}=await supabase.from("weekly_goal_bonuses").upsert({...input,status:"bonificado",paid_at:null,method:null,updated_at:new Date().toISOString()},{onConflict:"worker_id,week_start"}).select("*").single();
   if(error)throw error;
   const row={...data,week_start:date(data.week_start),week_end:date(data.week_end),paid_at:date(data.paid_at),amount:Number(data.amount)} as WeeklyGoalBonus;
   setWeeklyBonuses(x=>[row,...x.filter(b=>!(b.worker_id===row.worker_id&&b.week_start===row.week_start))]);
- },[]);
+
+  // Se já existe um fechamento futuro em aberto/fechado, soma o bônus imediatamente ao pagamento pendente.
+  if(existing?.status !== "bonificado"){
+    const today=toISO(new Date());
+    const {data:period}=await supabase.from("payment_periods").select("id,status,pay_date").neq("status","pago").gte("pay_date",today).order("pay_date",{ascending:true}).limit(1).maybeSingle();
+    if(period){
+      const {data:pay}=await supabase.from("payments").select("id,gross_amount").eq("period_id",period.id).eq("worker_id",input.worker_id).maybeSingle();
+      if(pay){
+        const {error:payError}=await supabase.from("payments").update({gross_amount:Math.round((Number(pay.gross_amount)+Number(input.amount))*100)/100}).eq("id",pay.id);
+        if(payError)throw payError;
+      }
+    }
+  }
+ },[weeklyBonuses]);
  const markBonusDismissed=useCallback(async(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>{
-  const {data,error}=await supabase.from("weekly_goal_bonuses").upsert({...input,status:"dispensado",paid_at:null,method:null,amount:0,updated_at:new Date().toISOString()},{onConflict:"worker_id,week_start"}).select("*").single();
+  const {data,error}=await supabase.from("weekly_goal_bonuses").upsert({...input,status:"dispensado",paid_at:null,method:null,updated_at:new Date().toISOString()},{onConflict:"worker_id,week_start"}).select("*").single();
   if(error)throw error;
   const row={...data,week_start:date(data.week_start),week_end:date(data.week_end),paid_at:date(data.paid_at),amount:Number(data.amount)} as WeeklyGoalBonus;
   setWeeklyBonuses(x=>[row,...x.filter(b=>!(b.worker_id===row.worker_id&&b.week_start===row.week_start))]);
  },[]);
- const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,weeklyBonuses,bonusTableMissing,bonusAmount,bonusEnabled,bonusRequirePresence,saveBonusSettings,markBonusPaid,markBonusDismissed,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal,deleteAttendance,weeklyBonuses,bonusTableMissing,bonusAmount,bonusEnabled,bonusRequirePresence,saveBonusSettings,markBonusPaid,markBonusDismissed,next.date,next.label]);
+ const value=useMemo<Store>(()=>({role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,nextPayDate:{...next,days:daysUntil(next.date,today)},cashBalance:openingBalance+paidIn-paidOut-paidWorkers-paidAllowances,loading,error,refresh,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,weeklyBonuses,bonusTableMissing,bonusAmount,bonusEnabled,bonusRequirePresence,saveBonusSettings,markBonusAwarded,markBonusDismissed,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,deleteAttendance,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addDailyAllowance,deleteDailyAllowance,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal}),[role,workers,contracts,expenseCategories,invoices,workerDocuments,workerEvents,workerEpis,attendance,paymentPeriods,payments,dailyAllowances,receivables,payables,cashFlowHistory,teams,openingBalance,loading,error,refresh,addWorker,updateWorker,deleteWorker,updateWorkerEpi,setAttendanceStatus,markAttendancePaid,updateAttendanceAmount,closePeriod,closePaymentCycle,markPaymentPaid,markReceived,addPayable,markPayablePaid,addTeam,updateTeam,setTeamMembers,serviceTypes,serviceOrders,productionGoals,productionGoalWeeks,addServiceType,updateServiceType,addServiceOrder,updateServiceOrder,deleteServiceOrder,finalizeServiceOrder,saveProductionGoal,deleteProductionGoal,deleteAttendance,weeklyBonuses,bonusTableMissing,bonusAmount,bonusEnabled,bonusRequirePresence,saveBonusSettings,markBonusAwarded,markBonusDismissed,next.date,next.label]);
  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 export function useStore(){const ctx=useContext(StoreContext);if(!ctx)throw new Error("useStore precisa estar dentro de <StoreProvider>");return ctx;}
