@@ -163,14 +163,25 @@ function DiariasPage() {
   }, [attendance]);
   const hasRecordIn = (workerId: string) => Boolean(month && monthsByWorker.get(workerId)?.has(month));
 
+  // A lista principal mostra somente diaristas ativos. O desligamento não apaga histórico.
   const diaristas = useMemo(
     () =>
       workers.filter(
         (worker) =>
           worker.employment_type === "diarista" &&
-          (worker.status !== "desligado" || hasRecordIn(worker.id) || (attendanceByWorker.get(worker.id) ?? []).some((row) => isWorked(row) && !rowPaymentStatus(worker.id, row).paid)),
+          worker.status !== "desligado",
       ),
-    [workers, month, monthsByWorker, attendanceByWorker, payments, paymentPeriods],
+    [workers],
+  );
+
+  const historicalDiaristas = useMemo(
+    () =>
+      workers.filter(
+        (worker) =>
+          worker.employment_type === "diarista" &&
+          worker.status === "desligado",
+      ),
+    [workers],
   );
 
   const selectedWorker = workers.find((worker) => worker.id === selectedWorkerId) ?? null;
@@ -180,9 +191,8 @@ function DiariasPage() {
       (row) => row.date.startsWith(targetMonth) && isWorked(row),
     );
 
-  const monthData = useMemo(() => {
-    if (!month) return [];
-    return diaristas.map((worker) => {
+  const buildMonthData = (workerList: Worker[]) =>
+    workerList.map((worker) => {
       const rows = getMonthRows(worker, month);
       const days = rows.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
       return {
@@ -194,7 +204,16 @@ function DiariasPage() {
         total: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
+
+  const monthData = useMemo(() => {
+    if (!month) return [];
+    return buildMonthData(diaristas);
   }, [month, diaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker]);
+
+  const historicalMonthData = useMemo(() => {
+    if (!month) return [];
+    return buildMonthData(historicalDiaristas).filter((item) => item.rows.length > 0);
+  }, [month, historicalDiaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker]);
 
   // Funcionários fixos com registro de ponto ou pagamento referente ao mês selecionado.
   const fixedData = useMemo(() => {
@@ -940,12 +959,12 @@ function DiariasPage() {
         </div>
       )}
 
-      {monthData.some((item) => item.rows.length > 0) ? (
+      {monthData.some((item) => item.rows.length > 0) || historicalMonthData.length > 0 ? (
         <Card className="mt-4 p-3">
           <p className="text-sm font-semibold">Diárias lançadas em {monthTitle(month)}</p>
-          <p className="mb-2 text-[11px] text-muted-foreground">Histórico permanente pela data trabalhada, mesmo que o pagamento tenha sido em outro mês.</p>
+          <p className="mb-2 text-[11px] text-muted-foreground">Histórico permanente pela data trabalhada, mesmo que o diarista tenha sido desligado ou o pagamento tenha sido feito em outro mês.</p>
           <div className="space-y-3">
-            {monthData.filter((item) => item.rows.length > 0).map((item) => (
+            {[...monthData.filter((item) => item.rows.length > 0), ...historicalMonthData].map((item) => (
               <div key={item.worker.id}>
                 <p className="text-xs font-bold uppercase text-primary-deep">{item.worker.full_name}</p>
                 {renderMonthRecords(item.worker, item.rows)}
