@@ -13,9 +13,9 @@ const monthName = (m: string) => {
 };
 
 export function useBonusEvaluations() {
-  const { productionGoalWeeks, serviceOrders, serviceTypes, attendance, workers, teams, weeklyBonuses } = useStore();
+  const { productionGoalWeeks, serviceOrders, serviceTypes, attendance, workers, teams, weeklyBonuses, bonusAmount, bonusRequirePresence } = useStore();
   return useMemo(
-    () => evaluateWeeks({ weeks: productionGoalWeeks, orders: serviceOrders, types: serviceTypes, attendance, workers, teams, bonuses: weeklyBonuses, today: toISO(new Date()) }),
+    () => evaluateWeeks({ weeks: productionGoalWeeks, orders: serviceOrders, types: serviceTypes, attendance, workers, teams, bonuses: weeklyBonuses, today: toISO(new Date()), bonusAmount, requirePresence: bonusRequirePresence }),
     [productionGoalWeeks, serviceOrders, serviceTypes, attendance, workers, teams, weeklyBonuses],
   );
 }
@@ -38,7 +38,7 @@ export function bonusByWorker(evals: WeekBonusEval[]) {
 function PayButton({ w, e }: { w: WeekBonusEval; e: WorkerBonusEval }) {
   const { markBonusPaid, role, bonusTableMissing } = useStore();
   const [busy, setBusy] = useState(false);
-  if (e.paid) return <Badge tone="success">Pago {dm(e.paid.paid_at || "")}</Badge>;
+  if (e.paid?.status === "pago") return <Badge tone="success">Pago {dm(e.paid.paid_at || "")}</Badge>;\n  if (e.paid?.status === "dispensado") return <Badge tone="warning">Não bonificado</Badge>;
   if (!e.amount) return null;
   if (!w.finished) return <Badge tone="info">Semana em andamento</Badge>;
   if (role !== "admin" || bonusTableMissing) return <Badge tone="warning">Pendente</Badge>;
@@ -66,7 +66,7 @@ function PayButton({ w, e }: { w: WeekBonusEval; e: WorkerBonusEval }) {
   );
 }
 
-export function WeekBonusCard({ w }: { w: WeekBonusEval }) {
+export function BonusDecisionModal({ w, onClose }: { w: WeekBonusEval; onClose: () => void }) {\n  const { markBonusPaid, markBonusDismissed, role, bonusTableMissing } = useStore();\n  const eligible = w.workers.filter(e => e.amount > 0 && !e.paid);\n  const [selected, setSelected] = useState<string[]>([]);\n  const [busy, setBusy] = useState(false);\n  const toggle = (id: string) => setSelected(x => x.includes(id) ? x.filter(v => v !== id) : [...x, id]);\n  if (!w.goalMet || !eligible.length || role !== "admin" || bonusTableMissing) return null;\n  const base = (e: WorkerBonusEval) => ({ worker_id:e.worker.id, team_id:e.teamId, goal_week_id:w.week.id, week_number:w.week.week_number, week_start:w.week.start_date, week_end:w.week.end_date, week_target_m2:w.target, realized_m2:w.realized, percent:Math.round(w.percent*100)/100, goal_met:w.goalMet, presence_ok:e.presenceOk, amount:e.amount, method:"pix" as const, notes:null });\n  const save = async () => { setBusy(true); try { for (const e of eligible.filter(x=>selected.includes(x.worker.id))) await markBonusPaid(base(e)); onClose(); } catch(err:any) { window.alert(err?.message || "Não foi possível registrar o bônus."); } finally { setBusy(false); } };\n  const dismiss = async () => { setBusy(true); try { for (const e of eligible) await markBonusDismissed(base(e)); onClose(); } catch(err:any) { window.alert(err?.message || "Não foi possível registrar a decisão."); } finally { setBusy(false); } };\n  return <div className="fixed inset-0 z-[60] flex items-center justify-center bg-foreground/50 p-4"><Card className="w-full max-w-md p-5"><p className="text-lg font-bold">Parabéns, você atingiu a meta!</p><p className="mt-1 text-sm text-muted-foreground">Semana {w.week.week_number}: {fm(w.realized)} m² realizados de {fm(w.target)} m². Bonificar seus diaristas?</p><div className="mt-4 space-y-2">{eligible.map(e=><button key={e.worker.id} type="button" onClick={()=>toggle(e.worker.id)} className={`flex w-full items-center justify-between rounded-xl border p-3 text-left ${selected.includes(e.worker.id)?"border-primary bg-primary/10":"border-border"}`}><span><strong>{e.worker.full_name}</strong><span className="block text-xs text-muted-foreground">{e.presenceOk?"Presença OK":"Sem elegibilidade de presença"} · {brl(e.amount)}</span></span><span className="text-sm font-bold">{selected.includes(e.worker.id)?"✓":"○"}</span></button>)}</div><div className="mt-4 grid grid-cols-1 gap-2"><Button disabled={!selected.length||busy} onClick={save}>{busy?"Salvando...":`Bonificar selecionado(s) (${selected.length})`}</Button><Button variant="outline" disabled={busy} onClick={dismiss}>Não bonificar nenhum</Button><Button variant="ghost" disabled={busy} onClick={onClose}>Decidir depois</Button></div></Card></div>;\n}\n\nexport function WeekBonusCard({ w }: { w: WeekBonusEval }) {
   const [open, setOpen] = useState(false);
   const divergent = w.workers.some((e) => e.divergent);
   return (
