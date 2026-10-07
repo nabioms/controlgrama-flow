@@ -27,8 +27,8 @@ export function bonusByWorker(evals: WeekBonusEval[]) {
     w.workers.forEach((e) => {
       const cur = map.get(e.worker.id) || { name: e.worker.full_name, earned: 0, paid: 0, pending: 0 };
       if (w.finished) cur.earned += e.amount;
-      if (e.paid) cur.paid += Number(e.paid.amount);
-      if (isPending(w, e)) cur.pending += e.amount;
+      if (e.paid?.status === "pago") cur.paid += Number(e.paid.amount);
+      if (w.finished && e.amount > 0 && e.paid?.status !== "pago" && e.paid?.status !== "dispensado") cur.pending += e.amount;
       map.set(e.worker.id, cur);
     }),
   );
