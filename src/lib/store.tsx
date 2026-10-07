@@ -72,7 +72,7 @@ export function StoreProvider({children}:{children:ReactNode}){
    supabase.from("service_types").select("*").order("name"),
    supabase.from("service_orders").select("*, service_type:service_types(*), contract:contracts(*), team:teams(*), service_order_workers(worker_id, worker:workers(*)), service_order_items(*, service_type:service_types(*))").order("service_date",{ascending:false}).order("order_number",{ascending:false}),
    supabase.from("production_goals").select("*").order("month",{ascending:false}),
-   supabase.from("production_goal_weeks").select("*").order("start_date",{ascending:true})
+   supabase.from("production_goal_weeks").select("*").order("start_date",{ascending:true}),supabase.from("bonus_settings").select("*").eq("id",true).maybeSingle()
   ]);
   const errors=q.map((x,i)=>x.error?{index:i,error:x.error}:null).filter(Boolean) as {index:number;error:any}[];
   if(errors.length){
@@ -247,8 +247,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   if(error)throw error;
   const {error:bonusPayError}=await supabase.from("weekly_goal_bonuses").update({status:"pago",paid_at:paidAt,method:m,updated_at:new Date().toISOString()}).eq("worker_id",updated.worker_id).eq("status","bonificado");
   if(bonusPayError)throw bonusPayError;
-  const {data:remaining,error:remainingError}=await supabase.from("payments").select("id").eq("period_id",updated.period_id).neq("status","pago");
-  if(remainingError)throw remainingError;
+  const {data:remaining,error:remainingError}=await supabase.from("payments").select("id").eq("period_id",updated.period_id).neq("status","pago");  if(remainingError)throw remainingError;
   if((remaining||[]).length===0){
     const {error:periodError}=await supabase.from("payment_periods").update({status:"pago"}).eq("id",updated.period_id);
     if(periodError)throw periodError;
