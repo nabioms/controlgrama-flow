@@ -1,7 +1,7 @@
 /**
  * Bônus de Meta Semanal — cálculo derivado (sem cadastro paralelo).
  * Fontes: production_goal_weeks (meta), service_orders realizadas (produção), attendance (ponto).
- * Pendentes são calculados; só bônus PAGOS são gravados (um por diarista + semana).
+ * A seleção de bonificação fica gravada como BONIFICADO; só muda para PAGO quando a folha/pagamento é efetivamente baixada.
  */
 import type { Attendance, ProductionGoalWeek, ServiceOrder, ServiceType, Team, WeeklyGoalBonus, Worker } from "./types";
 
@@ -82,7 +82,7 @@ export function evaluateWeeks(input: {
           const absences = mine.filter((a) => a.status === "falta").length;
           const presenceOk = requirePresence ? (presentDays > 0 && absences === 0) : presentDays > 0;
           const amount = goalMet && bonusEnabled && presenceOk ? Number(bonusAmount) : 0;
-          const paid = bonuses.find((b) => b.worker_id === w.id && b.week_start === week.start_date && b.status === "pago") || null;
+          const paid = bonuses.find((b) => b.worker_id === w.id && b.week_start === week.start_date && b.status !== "dispensado") || null;
           const team = teamOf(w.id);
           return { worker: w, teamId: team?.id || null, teamName: team?.name || null, presentDays, absences, presenceOk, amount, paid, divergent: !!paid && Number(paid.amount) !== amount };
         })
