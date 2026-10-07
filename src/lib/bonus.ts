@@ -95,4 +95,4 @@ export function evaluateWeeks(input: {
 }
 
 /** Pendente = calculado com direito, semana encerrada e ainda não pago. */
-export const isPending = (w: WeekBonusEval, e: WorkerBonusEval) => w.finished && e.amount > 0 && !e.paid;
+export const isPending = (w: WeekBonusEval, e: WorkerBonusEval) => w.finished && e.amount > 0 && e.paid?.status !== "pago" && e.paid?.status !== "dispensado";
