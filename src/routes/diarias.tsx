@@ -67,7 +67,7 @@ const nextPayCycle = () => {
 const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { workers, attendance, payments, paymentPeriods, setAttendanceStatus, updateAttendanceAmount, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
+  const { workers, attendance, payments, paymentPeriods, weeklyBonuses, setAttendanceStatus, updateAttendanceAmount, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -131,6 +131,17 @@ function DiariasPage() {
     return map;
   }, [attendance]);
 
+  const bonusByWorker = useMemo(() => {
+    const map = new Map<string, number>();
+    weeklyBonuses.filter((b) => b.status === "bonificado").forEach((b) => {
+      map.set(b.worker_id, Math.round(((map.get(b.worker_id) ?? 0) + Number(b.amount || 0)) * 100) / 100);
+    });
+    return map;
+  }, [weeklyBonuses]);
+
+  const openBonusRows = (worker: Worker) =>
+    weeklyBonuses.filter((b) => b.worker_id === worker.id && b.status === "bonificado");
+
   /** Todas as diárias trabalhadas e ainda não pagas, de qualquer mês. */
   const openRows = (worker: Worker) =>
     (attendanceByWorker.get(worker.id) ?? []).filter((row) => isWorked(row) && !rowPaymentStatus(worker.id, row).paid);
@@ -178,11 +189,12 @@ function DiariasPage() {
         worker,
         rows,
         days,
-        amount: Math.round(openRows(worker).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
+        amount: Math.round((openRows(worker).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) + (bonusByWorker.get(worker.id) ?? 0)) * 100) / 100,
+        bonusAmount: bonusByWorker.get(worker.id) ?? 0,
         total: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
-  }, [month, diaristas, attendanceByWorker, paymentPeriods, payments]);
+  }, [month, diaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker]);
 
   // Funcionários fixos com registro de ponto ou pagamento referente ao mês selecionado.
   const fixedData = useMemo(() => {
@@ -245,6 +257,7 @@ function DiariasPage() {
     const rows = openRows(selectedWorker);
     const rowMap = new Map(allRows.map((row) => [row.date, row]));
     const next = nextPayCycle();
+    const bonusRows = openBonusRows(selectedWorker);\n    const bonusAmount = bonusRows.reduce((sum,b) => sum + Number(b.amount || 0), 0);
     const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
     const cycles = [{ ...next, start: earliest < next.end ? earliest : next.end }];
 
@@ -259,11 +272,11 @@ function DiariasPage() {
     const cycleData = cycles
       .map((cycle) => ({
         ...cycle,
-        rows: rows.filter((row) => row.date <= cycle.end),
+        rows: rows.filter((row) => row.date <= cycle.end),\n        bonusRows,
       }))
       .map((cycle) => ({
         ...cycle,
-        ...sumRows(cycle.rows),
+        ...sumRows(cycle.rows),\n        bonusAmount,\n        amount: Math.round((sumRows(cycle.rows).amount + bonusAmount) * 100) / 100,
       }));
 
     const daysInMonth = new Date(
@@ -280,12 +293,12 @@ function DiariasPage() {
       rows,
       cycles: cycleData,
       totalDays: sumRows(rows).days,
-      totalAmount: sumRows(rows).amount,
+      totalAmount: Math.round((sumRows(rows).amount + bonusAmount) * 100) / 100,\n      bonusAmount,
       byMonth: openByMonth(selectedWorker),
       daysInMonth,
       firstWeekday,
     };
-  }, [selectedWorker, month, attendanceByWorker, payments, paymentPeriods]);
+  }, [selectedWorker, month, attendanceByWorker, payments, paymentPeriods, weeklyBonuses]);
 
   if (!month) {
     return (
@@ -331,6 +344,13 @@ function DiariasPage() {
             <p className="font-display text-2xl font-semibold text-primary-deep">{brl(detail.totalAmount)}</p>
           </Card>
         </div>
+        {detail.bonusAmount > 0 ? (
+          <Card className="mb-4 border-primary/30 bg-primary/5 p-3">
+            <p className="text-[10px] font-semibold uppercase text-muted-foreground">Bônus de meta</p>
+            <p className="mt-1 font-display text-xl font-semibold text-primary-deep">{brl(detail.bonusAmount)}</p>
+            <p className="text-[11px] text-muted-foreground">Bônus selecionados e ainda não pagos. Entram no próximo pagamento.</p>
+          </Card>
+        ) : null}
         {detail.byMonth.length ? (
           <Card className="mb-4 p-3">
             <p className="text-xs font-semibold">Em aberto por mês (todos os meses)</p>
@@ -368,7 +388,7 @@ function DiariasPage() {
                       Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}
+                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}{cycle.bonusAmount > 0 ? ` · Bônus ${brl(cycle.bonusAmount)}` : ""}
                     </p>
                   </div>
                   <p className="shrink-0 font-display text-xl font-semibold text-primary-deep">{brl(cycle.amount)}</p>
