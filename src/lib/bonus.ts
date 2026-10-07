@@ -57,8 +57,10 @@ export function evaluateWeeks(input: {
   teams: Team[];
   bonuses: WeeklyGoalBonus[];
   today: string;
+  bonusAmount?: number;
+  requirePresence?: boolean;
 }): WeekBonusEval[] {
-  const { weeks, orders, types, attendance, workers, teams, bonuses, today } = input;
+  const { weeks, orders, types, attendance, workers, teams, bonuses, today, bonusAmount = BONUS_AMOUNT, requirePresence = true } = input;
   const teamOf = (id: string) => teams.find((t) => (t.members || []).some((m) => m.id === id)) || null;
   return [...weeks]
     .sort((a, b) => a.start_date.localeCompare(b.start_date))
@@ -77,8 +79,8 @@ export function evaluateWeeks(input: {
           const mine = rows.filter((a) => a.worker_id === w.id);
           const presentDays = mine.filter((a) => a.status === "presente").length;
           const absences = mine.filter((a) => a.status === "falta").length;
-          const presenceOk = presentDays > 0 && absences === 0;
-          const amount = goalMet && presenceOk ? BONUS_AMOUNT : 0;
+          const presenceOk = requirePresence ? (presentDays > 0 && absences === 0) : presentDays > 0;
+          const amount = goalMet && presenceOk ? Number(bonusAmount) : 0;
           const paid = bonuses.find((b) => b.worker_id === w.id && b.week_start === week.start_date && b.status === "pago") || null;
           const team = teamOf(w.id);
           return { worker: w, teamId: team?.id || null, teamName: team?.name || null, presentDays, absences, presenceOk, amount, paid, divergent: !!paid && Number(paid.amount) !== amount };
