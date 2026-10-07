@@ -145,7 +145,7 @@ export interface WeeklyGoalBonus {
   goal_met: boolean;
   presence_ok: boolean;
   amount: number;
-  status: "pendente" | "pago";
+  status: "pago" | "dispensado";
   paid_at: ISODate | null;
   method: PaymentMethod | null;
   notes: string | null;
