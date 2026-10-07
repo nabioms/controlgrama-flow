@@ -257,7 +257,8 @@ function DiariasPage() {
     const rows = openRows(selectedWorker);
     const rowMap = new Map(allRows.map((row) => [row.date, row]));
     const next = nextPayCycle();
-    const bonusRows = openBonusRows(selectedWorker);\n    const bonusAmount = bonusRows.reduce((sum,b) => sum + Number(b.amount || 0), 0);
+    const bonusRows = openBonusRows(selectedWorker);
+    const bonusAmount = bonusRows.reduce((sum,b) => sum + Number(b.amount || 0), 0);
     const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
     const cycles = [{ ...next, start: earliest < next.end ? earliest : next.end }];
 
@@ -272,11 +273,14 @@ function DiariasPage() {
     const cycleData = cycles
       .map((cycle) => ({
         ...cycle,
-        rows: rows.filter((row) => row.date <= cycle.end),\n        bonusRows,
+        rows: rows.filter((row) => row.date <= cycle.end),
+        bonusRows,
       }))
       .map((cycle) => ({
         ...cycle,
-        ...sumRows(cycle.rows),\n        bonusAmount,\n        amount: Math.round((sumRows(cycle.rows).amount + bonusAmount) * 100) / 100,
+        ...sumRows(cycle.rows),
+        bonusAmount,
+        amount: Math.round((sumRows(cycle.rows).amount + bonusAmount) * 100) / 100,
       }));
 
     const daysInMonth = new Date(
@@ -293,7 +297,8 @@ function DiariasPage() {
       rows,
       cycles: cycleData,
       totalDays: sumRows(rows).days,
-      totalAmount: Math.round((sumRows(rows).amount + bonusAmount) * 100) / 100,\n      bonusAmount,
+      totalAmount: Math.round((sumRows(rows).amount + bonusAmount) * 100) / 100,
+      bonusAmount,
       byMonth: openByMonth(selectedWorker),
       daysInMonth,
       firstWeekday,
