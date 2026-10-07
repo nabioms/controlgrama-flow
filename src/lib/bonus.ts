@@ -58,7 +58,8 @@ export function evaluateWeeks(input: {
   bonuses: WeeklyGoalBonus[];
   today: string;
   bonusAmount?: number;
-  requirePresence?: boolean;\n  bonusEnabled?: boolean;
+  requirePresence?: boolean;
+  bonusEnabled?: boolean;
 }): WeekBonusEval[] {
   const { weeks, orders, types, attendance, workers, teams, bonuses, today, bonusAmount = BONUS_AMOUNT, requirePresence = true, bonusEnabled = true } = input;
   const teamOf = (id: string) => teams.find((t) => (t.members || []).some((m) => m.id === id)) || null;
