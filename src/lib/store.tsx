@@ -7,7 +7,7 @@ interface Store {
   role: UserRole; workers: Worker[]; contracts: Contract[]; expenseCategories: ExpenseCategory[]; invoices: Invoice[];
   workerDocuments: WorkerDocument[]; workerEvents: WorkerEvent[]; workerEpis: WorkerEpi[]; attendance: Attendance[]; paymentPeriods: PaymentPeriod[];
   payments: Payment[]; dailyAllowances: DailyAllowance[]; receivables: Receivable[]; payables: Payable[]; cashFlowHistory: CashFlowMonth[]; teams: Team[]; serviceTypes: ServiceType[]; serviceOrders: ServiceOrder[]; productionGoals: ProductionGoal[]; productionGoalWeeks: ProductionGoalWeek[]; weeklyBonuses: WeeklyGoalBonus[]; bonusTableMissing: boolean; bonusAmount: number; bonusEnabled: boolean; bonusRequirePresence: boolean;
-  markBonusPaid:(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>Promise<void>;
+  markBonusAwarded:(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>Promise<void>;
   markBonusDismissed:(input:Omit<WeeklyGoalBonus,"id"|"status"|"paid_at"|"created_at"|"updated_at">)=>Promise<void>;
   saveBonusSettings:(input:{enabled:boolean;amount:number;requirePresence:boolean})=>Promise<void>;
   nextPayDate: {date:string;label:string;days:number}; cashBalance:number; loading:boolean; error:string|null;
@@ -243,7 +243,7 @@ export function StoreProvider({children}:{children:ReactNode}){
 },[paymentPeriods,workers,attendance,refresh]);
  const markPaymentPaid=useCallback(async(id:string,m:PaymentMethod)=>{
   const paidAt=toISO(new Date());
-  const {data:updated,error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:paidAt}).eq("id",id).select("period_id").single();
+  const {data:updated,error}=await supabase.from("payments").update({status:"pago",method:m,paid_at:paidAt}).eq("id",id).select("period_id,worker_id").single();
   if(error)throw error;
   const {error:bonusPayError}=await supabase.from("weekly_goal_bonuses").update({status:"pago",paid_at:paidAt,method:m,updated_at:new Date().toISOString()}).eq("worker_id",updated.worker_id).eq("status","bonificado");
   if(bonusPayError)throw bonusPayError;
@@ -293,7 +293,7 @@ export function StoreProvider({children}:{children:ReactNode}){
   const {error:closeError}=await supabase.from("payment_periods").update({status:"fechado"}).eq("id",period.id);
   if(closeError)throw closeError;
   await refresh();
-},[workers,attendance,paymentPeriods,payments,refresh]);
+},[workers,attendance,paymentPeriods,payments,weeklyBonuses,refresh]);
 
  const markReceived=useCallback(async(id:string)=>{const {error}=await supabase.from("receivables").update({status:"recebido",received_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
  const addDailyAllowance=useCallback(async(input:{worker_id:string;date:string;amount?:number;method:PaymentMethod;notes?:string|null})=>{
