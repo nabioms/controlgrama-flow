@@ -350,7 +350,7 @@ export function StoreProvider({children}:{children:ReactNode}){
       if(updateError)throw updateError;
     }
   }
- },[]);
+ },[workerAdvances]);
  const deleteWorkerAdvance=useCallback(async(id:string)=>{
   const row=workerAdvances.find(a=>a.id===id);
   if(!row)throw new Error("Vale não encontrado.");
