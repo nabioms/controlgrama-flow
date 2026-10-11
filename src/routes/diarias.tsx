@@ -406,6 +406,7 @@ function DiariasPage() {
             const cycleGross = Number(cycle.grossAmount ?? cycle.amount);
             const cycleAdvance = workerPayment ? Number(workerPayment.advance_amount || 0) : Number(cycle.advanceAmount || 0);
             const cycleNet = Math.max(0, cycleGross - cycleAdvance);
+            const advanceLabel = cyclePaid ? "Vale descontado" : workerPayment ? "Vale previsto" : "Vale a descontar";
 
             return (
               <Card key={cycle.key} className="p-3">
@@ -418,7 +419,7 @@ function DiariasPage() {
                       Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}{cycle.bonusAmount > 0 ? ` · Bônus ${brl(cycle.bonusAmount)}` : ""}{cycleAdvance > 0 ? ` · Vale descontado ${brl(cycleAdvance)}` : ""}
+                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}{cycle.bonusAmount > 0 ? ` · Bônus ${brl(cycle.bonusAmount)}` : ""}{cycleAdvance > 0 ? ` · ${advanceLabel} ${brl(cycleAdvance)}` : ""}
                     </p>
                   </div>
                   <div className="shrink-0 text-right"><p className="font-display text-xl font-semibold text-primary-deep">{brl(cycleNet)}</p>{cycleAdvance > 0 ? <p className="text-[10px] text-muted-foreground">Bruto {brl(cycleGross)}</p> : null}</div>
