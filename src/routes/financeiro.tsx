@@ -35,15 +35,15 @@ export const Route = createFileRoute("/financeiro")({
   component: FinanceiroPage,
 });
 
-const tabs = ["Resumo", "Receber", "Pagar", "Ajuda de custo", "Bônus Meta Semanal", "Notas"] as const;
+const tabs = ["Resumo", "Receber", "Pagar", "Ajuda de custo", "Vales", "Bônus Meta Semanal", "Notas"] as const;
 
 function FinanceiroPage() {
-  const { receivables, payables, payments, dailyAllowances, workers, attendance, markReceived, markPayablePaid, addPayable, addDailyAllowance, deleteDailyAllowance, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
+  const { receivables, payables, payments, dailyAllowances, workerAdvances, workers, attendance, markReceived, markPayablePaid, addPayable, addDailyAllowance, deleteDailyAllowance, addWorkerAdvance, deleteWorkerAdvance, cashBalance, cashFlowHistory, contracts, expenseCategories, invoices } = useStore();
   const [tab, setTab] = useState<(typeof tabs)[number]>("Resumo");
   const [allowanceDate, setAllowanceDate] = useState(toISO(new Date()));
   const [allowanceAmount, setAllowanceAmount] = useState("20");
   const [allowanceMethod, setAllowanceMethod] = useState<"pix" | "dinheiro" | "transferencia">("dinheiro");
-  const [selectedAllowanceWorkers, setSelectedAllowanceWorkers] = useState<string[]>([]);
+  const [selectedAllowanceWorkers, setSelectedAllowanceWorkers] = useState<string[]>([]);\n  const [advanceWorkerId, setAdvanceWorkerId] = useState("");\n  const [advanceDate, setAdvanceDate] = useState(toISO(new Date()));\n  const [advanceAmount, setAdvanceAmount] = useState("");\n  const [advanceMethod, setAdvanceMethod] = useState<"pix" | "dinheiro" | "transferencia">("pix");\n  const [advanceNotes, setAdvanceNotes] = useState("");\n  const [savingAdvance, setSavingAdvance] = useState(false);
   const [form, setForm] = useState({
     description: "",
     amount: "",
@@ -133,7 +133,7 @@ function FinanceiroPage() {
     }
   };
 
-  const submit = () => {
+  const registerAdvance = async () => {\n    const amount = Number(advanceAmount.replace(",", "."));\n    if (!advanceWorkerId) { window.alert("Selecione o diarista."); return; }\n    if (!Number.isFinite(amount) || amount <= 0) { window.alert("Informe um valor válido para o vale."); return; }\n    setSavingAdvance(true);\n    try {\n      await addWorkerAdvance({ worker_id: advanceWorkerId, date: advanceDate, amount, method: advanceMethod, notes: advanceNotes });\n      setAdvanceAmount("");\n      setAdvanceNotes("");\n      window.alert("Vale registrado. Ele será considerado no próximo fechamento do 5º dia útil.");\n    } catch (error) {\n      window.alert(error instanceof Error ? error.message : "Não foi possível registrar o vale.");\n    } finally { setSavingAdvance(false); }\n  };\n\n  const submit = () => {
     if (!form.description || !form.amount) return;
     addPayable({
       id: `pb-${Date.now()}`,
@@ -413,6 +413,99 @@ function FinanceiroPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </>
+      ) : null}
+
+      {tab === "Vales" ? (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-2.5">
+            <StatCard
+              label="Vales em aberto"
+              value={brl(workerAdvances.filter((a) => a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0))}
+              sub="Saldo a descontar"
+              tone="warning"
+              icon={<WalletCards className="size-4" />}
+            />
+            <StatCard
+              label="Vales registrados"
+              value={String(workerAdvances.length)}
+              sub="Histórico total"
+              tone="info"
+              icon={<WalletCards className="size-4" />}
+            />
+          </div>
+
+          <Card className="mb-4 space-y-3">
+            <SectionTitle title="Registrar vale" hint="Adiantamento em dinheiro ou PIX para descontar das diárias" />
+            <Field label="Diarista">
+              <Select value={advanceWorkerId} onChange={(e) => setAdvanceWorkerId(e.target.value)}>
+                <option value="">Selecione o diarista</option>
+                {allowanceDiaristas.map((w) => (
+                  <option key={w.id} value={w.id}>{w.full_name}</option>
+                ))}
+              </Select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Data do vale">
+                <Input type="date" value={advanceDate} onChange={(e) => setAdvanceDate(e.target.value)} />
+              </Field>
+              <Field label="Valor (R$)">
+                <Input type="number" min="0.01" step="0.01" value={advanceAmount} onChange={(e) => setAdvanceAmount(e.target.value)} placeholder="Ex.: 100,00" />
+              </Field>
+            </div>
+            <Field label="Forma de pagamento">
+              <Select value={advanceMethod} onChange={(e) => setAdvanceMethod(e.target.value as typeof advanceMethod)}>
+                <option value="pix">PIX</option>
+                <option value="dinheiro">Dinheiro</option>
+                <option value="transferencia">Transferência</option>
+              </Select>
+            </Field>
+            <Field label="Observação (opcional)">
+              <Input value={advanceNotes} onChange={(e) => setAdvanceNotes(e.target.value)} placeholder="Ex.: adiantamento solicitado pelo diarista" />
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              O vale fica registrado separadamente e será descontado no próximo fechamento do 5º dia útil. Se o saldo das diárias não cobrir todo o vale, o restante continua pendente para o próximo pagamento.
+            </p>
+            <Button className="w-full" onClick={registerAdvance} disabled={savingAdvance || !advanceWorkerId || !advanceAmount}>
+              <WalletCards className="size-4" /> {savingAdvance ? "Registrando..." : "Registrar vale"}
+            </Button>
+          </Card>
+
+          <SectionTitle title="Histórico de vales" hint="Adiantamentos e descontos já realizados" />
+          <div className="space-y-2">
+            {workerAdvances.length === 0 ? <EmptyState text="Nenhum vale registrado ainda." /> : null}
+            {workerAdvances.map((a) => {
+              const workerName = workers.find((w) => w.id === a.worker_id)?.full_name ?? "Diarista";
+              const remaining = Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0));
+              const statusLabel = a.status === "descontado" ? "Descontado" : a.status === "parcial" ? "Parcialmente descontado" : "Pendente";
+              const tone = a.status === "descontado" ? "success" as const : a.status === "parcial" ? "info" as const : "warning" as const;
+              return (
+                <div key={a.id} className="card-surface flex items-start gap-3 p-3">
+                  <WalletCards className="mt-1 size-4 shrink-0 text-primary" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-semibold">{workerName}</p>
+                      <Badge tone={tone}>{statusLabel}</Badge>
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatDate(a.date)} · {a.method === "dinheiro" ? "Dinheiro" : a.method === "pix" ? "PIX" : "Transferência"}
+                    </p>
+                    {a.notes ? <p className="mt-1 text-xs text-muted-foreground">{a.notes}</p> : null}
+                    <p className="mt-2 text-xs">Valor do vale: <strong>{brl(Number(a.amount))}</strong></p>
+                    <p className="text-xs text-muted-foreground">Já descontado: {brl(Number(a.deducted_amount || 0))} · Saldo: {brl(remaining)}</p>
+                  </div>
+                  {a.status === "pendente" && Number(a.deducted_amount || 0) === 0 ? (
+                    <button type="button" aria-label="Excluir vale" className="inline-flex shrink-0 items-center gap-1 text-[11px] text-destructive" onClick={async () => {
+                      if (!window.confirm("Deseja excluir este vale?")) return;
+                      try { await deleteWorkerAdvance(a.id); } catch (error) { window.alert(error instanceof Error ? error.message : "Não foi possível excluir o vale."); }
+                    }}>
+                      <Trash2 className="size-3" /> Excluir
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </>
       ) : null}
