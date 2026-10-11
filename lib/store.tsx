@@ -226,7 +226,8 @@ export function StoreProvider({children}:{children:ReactNode}){
   if(error)throw error;
   let remainingAdvance=Math.max(0,Number(updated.advance_amount||0));
   if(remainingAdvance>0){
-    const {data:advances,error:advanceError}=await supabase.from("worker_advances").select("*").eq("worker_id",updated.worker_id).neq("status","descontado").order("date",{ascending:true}).order("created_at",{ascending:true});
+    const period=paymentPeriods.find(p=>p.id===updated.period_id);
+    const {data:advances,error:advanceError}=await supabase.from("worker_advances").select("*").eq("worker_id",updated.worker_id).lte("date",period?.end_date??paidAt).neq("status","descontado").order("date",{ascending:true}).order("created_at",{ascending:true});
     if(advanceError)throw advanceError;
     for(const advance of (advances||[]) as WorkerAdvance[]){
       if(remainingAdvance<=0)break;
@@ -247,7 +248,7 @@ export function StoreProvider({children}:{children:ReactNode}){
     if(periodError)throw periodError;
   }
   await refresh();
-},[refresh,payments]);
+},[refresh,payments,paymentPeriods]);
  const closePaymentCycle=useCallback(async(input:{cycle:PaymentPeriod["cycle"];label:string;start_date:string;end_date:string;pay_date:string})=>{
   let {data:period,error:periodError}=await supabase.from("payment_periods")
     .select("*")
@@ -305,8 +306,23 @@ export function StoreProvider({children}:{children:ReactNode}){
   if(!Number.isFinite(amount)||amount<=0)throw new Error("Informe um valor de vale válido.");
   const {data,error}=await supabase.from("worker_advances").insert({worker_id:input.worker_id,date:input.date,amount,method:input.method,notes:input.notes?.trim()||null,deducted_amount:0,status:"pendente"}).select("*").single();
   if(error)throw error;
-  setWorkerAdvances(current=>[data as WorkerAdvance,...current]);
- },[]);
+  const created=data as WorkerAdvance;
+  setWorkerAdvances(current=>[created,...current]);
+  // Atualiza também uma folha já fechada que ainda aguarda pagamento.
+  const candidate=payments
+    .filter(p=>p.worker_id===input.worker_id&&p.status==="pendente")
+    .map(p=>({payment:p,period:paymentPeriods.find(period=>period.id===p.period_id)}))
+    .filter(x=>x.period&&x.period.end_date>=input.date)
+    .sort((a,b)=>String(a.period!.end_date).localeCompare(String(b.period!.end_date)))[0];
+  if(candidate?.period){
+    const outstanding=[created,...workerAdvances].filter(a=>a.worker_id===input.worker_id&&a.date<=candidate.period!.end_date&&a.status!=="descontado")
+      .reduce((sum,a)=>sum+Math.max(0,Number(a.amount)-Number(a.deducted_amount||0)),0);
+    const advanceAmount=Math.round(Math.min(Number(candidate.payment.gross_amount||0),outstanding)*100)/100;
+    const {data:updatedPayment,error:paymentError}=await supabase.from("payments").update({advance_amount:advanceAmount}).eq("id",candidate.payment.id).eq("status","pendente").select("*").single();
+    if(paymentError)throw paymentError;
+    setPayments(current=>current.map(p=>p.id===candidate.payment.id?payment(updatedPayment):p));
+  }
+ },[payments,paymentPeriods,workerAdvances]);
  const deleteWorkerAdvance=useCallback(async(id:string)=>{
   const current=workerAdvances.find(a=>a.id===id);
   if(!current)throw new Error("Vale não encontrado.");
