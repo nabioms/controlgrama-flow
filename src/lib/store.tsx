@@ -358,7 +358,22 @@ export function StoreProvider({children}:{children:ReactNode}){
   if(Number(row.deducted_amount||0)>0||row.status!=="pendente")throw new Error("Este vale já teve desconto parcial ou total e não pode ser excluído.");
   const {error}=await supabase.from("worker_advances").delete().eq("id",id);
   if(error)throw error;
-  setWorkerAdvances(x=>x.filter(a=>a.id!==id));
+  const remainingAdvances=workerAdvances.filter(a=>a.id!==id);
+  setWorkerAdvances(remainingAdvances);
+  const today=toISO(new Date());
+  const {data:period,error:periodError}=await supabase.from("payment_periods").select("id").neq("status","pago").gte("pay_date",today).order("pay_date",{ascending:true}).limit(1).maybeSingle();
+  if(periodError)throw periodError;
+  if(period){
+    const {data:existingPayment,error:paymentError}=await supabase.from("payments").select("id,gross_amount").eq("period_id",period.id).eq("worker_id",row.worker_id).eq("status","pendente").maybeSingle();
+    if(paymentError)throw paymentError;
+    if(existingPayment){
+      const openBalance=remainingAdvances.filter(a=>a.worker_id===row.worker_id&&a.status!=="descontado").reduce((sum,a)=>sum+Math.max(0,Number(a.amount)-Number(a.deducted_amount||0)),0);
+      const advanceAmount=Math.round(Math.min(Number(existingPayment.gross_amount||0),openBalance)*100)/100;
+      const {error:updateError}=await supabase.from("payments").update({advance_amount:advanceAmount}).eq("id",existingPayment.id);
+      if(updateError)throw updateError;
+      setPayments(current=>current.map(p=>p.id===existingPayment.id?{...p,advance_amount:advanceAmount}:p));
+    }
+  }
  },[workerAdvances]);
  const addPayable=useCallback(async(p:Payable)=>{const {id,paid_at,...row}=p;const {data,error}=await supabase.from("payables").insert({...row,paid_at:null}).select("*").single();if(error)throw error;setPayables(x=>[payable(data),...x])},[]);
  const markPayablePaid=useCallback(async(id:string)=>{const {error}=await supabase.from("payables").update({status:"pago",paid_at:new Date().toISOString()}).eq("id",id);if(error)throw error;await refresh()},[refresh]);
