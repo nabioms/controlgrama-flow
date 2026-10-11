@@ -670,7 +670,7 @@ function DiariasPage() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-bold text-primary-deep">{brl(Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0)))}</p>{Number(p.advance_amount || 0) > 0 ? <p className="text-[9px] text-muted-foreground">Bruto {brl(p.gross_amount)} · vale {brl(p.advance_amount || 0)}</p> : null>
+                      <p className="text-sm font-bold text-primary-deep">{brl(Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0)))}</p>{Number(p.advance_amount || 0) > 0 ? <p className="text-[9px] text-muted-foreground">Bruto {brl(p.gross_amount)} · vale {brl(p.advance_amount || 0)}</p> : null}
                       <p className="text-[9px] text-muted-foreground">
                         {p.method === "pix" ? "PIX" : p.method === "dinheiro" ? "Dinheiro" : "Transferência"}
                       </p>
