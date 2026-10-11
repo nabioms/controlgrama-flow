@@ -320,6 +320,9 @@ function DiariasPage() {
       cycles: cycleData,
       totalDays: sumRows(rows).days,
       totalAmount: Math.max(0, Math.round((sumRows(rows).amount + bonusAmount - Math.min(sumRows(rows).amount + bonusAmount, advanceBalance)) * 100) / 100),
+      monthOpenGross: Math.round(rows.filter(row => row.date.startsWith(month)).reduce((sum,row)=>sum+attendanceAmount(selectedWorker,row),0)*100)/100,
+      monthAdvanceBalance: Math.round(workerAdvances.filter(a=>a.worker_id===selectedWorker.id&&a.date.startsWith(month)&&a.status!=="descontado").reduce((sum,a)=>sum+Math.max(0,Number(a.amount)-Number(a.deducted_amount||0)),0)*100)/100,
+      monthAdvances: workerAdvances.filter(a=>a.worker_id===selectedWorker.id&&a.date.startsWith(month)),
       bonusAmount,
       byMonth: openByMonth(selectedWorker),
       daysInMonth,
@@ -519,6 +522,24 @@ function DiariasPage() {
           <p className="text-sm font-semibold">Diárias de {monthTitle(month)}</p>
           <p className="mb-2 text-[11px] text-muted-foreground">Todas as diárias trabalhadas neste mês, pagas ou não.</p>
           {renderMonthRecords(selectedWorker, (attendanceByWorker.get(selectedWorker.id) ?? []).filter((row) => row.date.startsWith(month) && isWorked(row)))}
+          <div className="mt-3 space-y-2 border-t border-border pt-3">
+            <div className="flex items-center justify-between gap-2 text-xs"><span className="text-muted-foreground">Diárias em aberto no mês</span><strong>{brl(detail.monthOpenGross)}</strong></div>
+            <div className="flex items-center justify-between gap-2 text-xs"><span className="text-muted-foreground">Vales registrados em {monthTitle(month)}</span><strong className="text-destructive">− {brl(detail.monthAdvanceBalance)}</strong></div>
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/40 p-2 text-sm"><span className="font-semibold">Saldo após os vales</span><strong className="text-primary-deep">{brl(Math.max(0,detail.monthOpenGross-detail.monthAdvanceBalance))}</strong></div>
+          </div>
+          <div className="mt-3 border-t border-border pt-3">
+            <p className="mb-2 text-xs font-semibold">Histórico de vales</p>
+            {detail.monthAdvances.length ? detail.monthAdvances.slice().sort((a,b)=>b.date.localeCompare(a.date)).map((advance)=>(
+              <div key={advance.id} className="flex items-start justify-between gap-3 border-b border-border py-2 last:border-0">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold">{formatDate(advance.date)} · {advance.method==="dinheiro"?"Dinheiro":advance.method==="pix"?"PIX":"Transferência"}</p>
+                  {advance.notes ? <p className="mt-0.5 text-[10px] text-muted-foreground">{advance.notes}</p> : null}
+                  <p className="mt-0.5 text-[10px] text-muted-foreground">{advance.status==="descontado"?"Descontado":advance.status==="parcial"?"Parcialmente descontado":"Pendente de desconto"} · saldo do vale {brl(Math.max(0,Number(advance.amount)-Number(advance.deducted_amount||0)))}</p>
+                </div>
+                <strong className="shrink-0 text-xs text-destructive">− {brl(Number(advance.amount))}</strong>
+              </div>
+            )) : <p className="text-[11px] text-muted-foreground">Nenhum vale registrado neste mês.</p>}
+          </div>
         </Card>
 
         <Card className="mb-4 p-3">
