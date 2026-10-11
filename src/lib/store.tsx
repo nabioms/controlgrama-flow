@@ -348,6 +348,7 @@ export function StoreProvider({children}:{children:ReactNode}){
       const advanceAmount=Math.round(Math.min(Number(existingPayment.gross_amount||0),openBalance)*100)/100;
       const {error:updateError}=await supabase.from("payments").update({advance_amount:advanceAmount}).eq("id",existingPayment.id);
       if(updateError)throw updateError;
+      setPayments(current=>current.map(p=>p.id===existingPayment.id?{...p,advance_amount:advanceAmount}:p));
     }
   }
  },[workerAdvances]);
