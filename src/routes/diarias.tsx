@@ -67,7 +67,7 @@ const nextPayCycle = () => {
 const isWorked = (row?: Attendance) => row?.status === "presente";
 
 function DiariasPage() {
-  const { workers, attendance, payments, paymentPeriods, weeklyBonuses, setAttendanceStatus, updateAttendanceAmount, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
+  const { workers, attendance, payments, paymentPeriods, weeklyBonuses, workerAdvances, setAttendanceStatus, updateAttendanceAmount, markAttendancePaid, deleteAttendance, closePaymentCycle, markPaymentPaid } = useStore();
   const [month, setMonth] = useState("");
   const [selectedWorkerId, setSelectedWorkerId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
@@ -199,7 +199,7 @@ function DiariasPage() {
         worker,
         rows,
         days,
-        amount: Math.round((openRows(worker).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) + (bonusByWorker.get(worker.id) ?? 0)) * 100) / 100,
+        amount: (() => { const gross = openRows(worker).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) + (bonusByWorker.get(worker.id) ?? 0); const advances = workerAdvances.filter((a) => a.worker_id === worker.id && a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0); return Math.max(0, Math.round((gross - Math.min(gross, advances)) * 100) / 100); })(),
         bonusAmount: bonusByWorker.get(worker.id) ?? 0,
         total: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
@@ -208,12 +208,12 @@ function DiariasPage() {
   const monthData = useMemo(() => {
     if (!month) return [];
     return buildMonthData(diaristas);
-  }, [month, diaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker]);
+  }, [month, diaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker, workerAdvances]);
 
   const historicalMonthData = useMemo(() => {
     if (!month) return [];
     return buildMonthData(historicalDiaristas).filter((item) => item.rows.length > 0);
-  }, [month, historicalDiaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker]);
+  }, [month, historicalDiaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker, workerAdvances]);
 
   // Funcionários fixos com registro de ponto ou pagamento referente ao mês selecionado.
   const fixedData = useMemo(() => {
@@ -278,6 +278,7 @@ function DiariasPage() {
     const next = nextPayCycle();
     const bonusRows = openBonusRows(selectedWorker);
     const bonusAmount = bonusRows.reduce((sum,b) => sum + Number(b.amount || 0), 0);
+    const advanceBalance = workerAdvances.filter((a) => a.worker_id === selectedWorker.id && a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0);
     const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
     const cycles = [{ ...next, start: earliest < next.end ? earliest : next.end }];
 
@@ -299,7 +300,9 @@ function DiariasPage() {
         ...cycle,
         ...sumRows(cycle.rows),
         bonusAmount,
-        amount: Math.round((sumRows(cycle.rows).amount + bonusAmount) * 100) / 100,
+        grossAmount: Math.round((sumRows(cycle.rows).amount + bonusAmount) * 100) / 100,
+        advanceAmount: Math.round(Math.min(sumRows(cycle.rows).amount + bonusAmount, advanceBalance) * 100) / 100,
+        amount: Math.max(0, Math.round((sumRows(cycle.rows).amount + bonusAmount - Math.min(sumRows(cycle.rows).amount + bonusAmount, advanceBalance)) * 100) / 100),
       }));
 
     const daysInMonth = new Date(
@@ -316,13 +319,13 @@ function DiariasPage() {
       rows,
       cycles: cycleData,
       totalDays: sumRows(rows).days,
-      totalAmount: Math.round((sumRows(rows).amount + bonusAmount) * 100) / 100,
+      totalAmount: Math.max(0, Math.round((sumRows(rows).amount + bonusAmount - Math.min(sumRows(rows).amount + bonusAmount, advanceBalance)) * 100) / 100),
       bonusAmount,
       byMonth: openByMonth(selectedWorker),
       daysInMonth,
       firstWeekday,
     };
-  }, [selectedWorker, month, attendanceByWorker, payments, paymentPeriods, weeklyBonuses]);
+  }, [selectedWorker, month, attendanceByWorker, payments, paymentPeriods, weeklyBonuses, workerAdvances]);
 
   if (!month) {
     return (
@@ -400,6 +403,9 @@ function DiariasPage() {
               : null;
             const cyclePaid = workerPayment?.status === "pago";
             const cyclePending = workerPayment?.status === "pendente";
+            const cycleGross = Number(cycle.grossAmount ?? cycle.amount);
+            const cycleAdvance = workerPayment ? Number(workerPayment.advance_amount || 0) : Number(cycle.advanceAmount || 0);
+            const cycleNet = Math.max(0, cycleGross - cycleAdvance);
 
             return (
               <Card key={cycle.key} className="p-3">
@@ -412,10 +418,10 @@ function DiariasPage() {
                       Período: {formatDate(cycle.start)} a {formatDate(cycle.end)}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}{cycle.bonusAmount > 0 ? ` · Bônus ${brl(cycle.bonusAmount)}` : ""}
+                      {cycle.days.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} dias em aberto até {formatDate(cycle.end)}{cycle.bonusAmount > 0 ? ` · Bônus ${brl(cycle.bonusAmount)}` : ""}{cycleAdvance > 0 ? ` · Vale descontado ${brl(cycleAdvance)}` : ""}
                     </p>
                   </div>
-                  <p className="shrink-0 font-display text-xl font-semibold text-primary-deep">{brl(cycle.amount)}</p>
+                  <div className="shrink-0 text-right"><p className="font-display text-xl font-semibold text-primary-deep">{brl(cycleNet)}</p>{cycleAdvance > 0 ? <p className="text-[10px] text-muted-foreground">Bruto {brl(cycleGross)}</p> : null}</div>
                 </div>
 
                 <div className="mt-3 border-t border-border pt-3">
@@ -635,7 +641,7 @@ function DiariasPage() {
           {(() => {
             const paidPeriodTotal = payments
               .filter((p) => p.worker_id === selectedWorker.id && p.status === "pago")
-              .reduce((sum, p) => sum + Number(p.gross_amount || 0), 0);
+              .reduce((sum, p) => sum + Math.max(0, Number(p.gross_amount || 0) - Number(p.advance_amount || 0)), 0);
             const paidDailyTotal = attendance
               .filter((row) => row.worker_id === selectedWorker.id && row.status === "presente" && row.paid_at)
               .reduce((sum, row) => sum + attendanceAmount(selectedWorker, row), 0);
@@ -664,7 +670,7 @@ function DiariasPage() {
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-sm font-bold text-primary-deep">{brl(p.gross_amount)}</p>
+                      <p className="text-sm font-bold text-primary-deep">{brl(Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0)))}</p>{Number(p.advance_amount || 0) > 0 ? <p className="text-[9px] text-muted-foreground">Bruto {brl(p.gross_amount)} · vale {brl(p.advance_amount || 0)}</p> : null>
                       <p className="text-[9px] text-muted-foreground">
                         {p.method === "pix" ? "PIX" : p.method === "dinheiro" ? "Dinheiro" : "Transferência"}
                       </p>
