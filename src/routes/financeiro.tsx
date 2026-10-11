@@ -43,7 +43,13 @@ function FinanceiroPage() {
   const [allowanceDate, setAllowanceDate] = useState(toISO(new Date()));
   const [allowanceAmount, setAllowanceAmount] = useState("20");
   const [allowanceMethod, setAllowanceMethod] = useState<"pix" | "dinheiro" | "transferencia">("dinheiro");
-  const [selectedAllowanceWorkers, setSelectedAllowanceWorkers] = useState<string[]>([]);\n  const [advanceWorkerId, setAdvanceWorkerId] = useState("");\n  const [advanceDate, setAdvanceDate] = useState(toISO(new Date()));\n  const [advanceAmount, setAdvanceAmount] = useState("");\n  const [advanceMethod, setAdvanceMethod] = useState<"pix" | "dinheiro" | "transferencia">("pix");\n  const [advanceNotes, setAdvanceNotes] = useState("");\n  const [savingAdvance, setSavingAdvance] = useState(false);
+  const [selectedAllowanceWorkers, setSelectedAllowanceWorkers] = useState<string[]>([]);
+  const [advanceWorkerId, setAdvanceWorkerId] = useState("");
+  const [advanceDate, setAdvanceDate] = useState(toISO(new Date()));
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceMethod, setAdvanceMethod] = useState<"pix" | "dinheiro" | "transferencia">("pix");
+  const [advanceNotes, setAdvanceNotes] = useState("");
+  const [savingAdvance, setSavingAdvance] = useState(false);
   const [form, setForm] = useState({
     description: "",
     amount: "",
@@ -133,7 +139,22 @@ function FinanceiroPage() {
     }
   };
 
-  const registerAdvance = async () => {\n    const amount = Number(advanceAmount.replace(",", "."));\n    if (!advanceWorkerId) { window.alert("Selecione o diarista."); return; }\n    if (!Number.isFinite(amount) || amount <= 0) { window.alert("Informe um valor válido para o vale."); return; }\n    setSavingAdvance(true);\n    try {\n      await addWorkerAdvance({ worker_id: advanceWorkerId, date: advanceDate, amount, method: advanceMethod, notes: advanceNotes });\n      setAdvanceAmount("");\n      setAdvanceNotes("");\n      window.alert("Vale registrado. Ele será considerado no próximo fechamento do 5º dia útil.");\n    } catch (error) {\n      window.alert(error instanceof Error ? error.message : "Não foi possível registrar o vale.");\n    } finally { setSavingAdvance(false); }\n  };\n\n  const submit = () => {
+  const registerAdvance = async () => {
+    const amount = Number(advanceAmount.replace(",", "."));
+    if (!advanceWorkerId) { window.alert("Selecione o diarista."); return; }
+    if (!Number.isFinite(amount) || amount <= 0) { window.alert("Informe um valor válido para o vale."); return; }
+    setSavingAdvance(true);
+    try {
+      await addWorkerAdvance({ worker_id: advanceWorkerId, date: advanceDate, amount, method: advanceMethod, notes: advanceNotes });
+      setAdvanceAmount("");
+      setAdvanceNotes("");
+      window.alert("Vale registrado. Ele será considerado no próximo fechamento do 5º dia útil.");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Não foi possível registrar o vale.");
+    } finally { setSavingAdvance(false); }
+  };
+
+  const submit = () => {
     if (!form.description || !form.amount) return;
     addPayable({
       id: `pb-${Date.now()}`,
