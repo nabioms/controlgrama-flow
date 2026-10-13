@@ -63,8 +63,10 @@ function monthWeeks(month:string){
   return result;
 }
 
+function productionDate(o:any){return o.completed_at ? String(o.completed_at).slice(0,10) : o.service_date;}
+
 function productionForMonth(serviceOrders:any[],serviceTypes:any[],month:string){
-  return serviceOrders.filter(o=>o.service_date.startsWith(month)&&o.status==="realizada").reduce((sum,o)=>{
+  return serviceOrders.filter(o=>productionDate(o).startsWith(month)&&o.status==="realizada").reduce((sum,o)=>{
     const items=o.items||[];
     if(items.length)return sum+items.reduce((s:any,i:any)=>{const t=i.service_type||serviceTypes.find((x:any)=>x.id===i.service_type_id);return s+(t?.unit==="m2"?Number(i.realized_quantity??0):0);},0);
     const t=o.service_type||serviceTypes.find((x:any)=>x.id===o.service_type_id);
@@ -107,7 +109,7 @@ function MetasPage(){
   const completedWeek=weeks.map((w,index)=>{
     const saved=savedWeeks.find(x=>x.week_number===w.week_number);
     const weekTarget=Number(saved?.target_m2||0);
-    const achieved=serviceOrders.filter(o=>o.service_date>=w.start_date&&o.service_date<=w.end_date&&o.status==="realizada").reduce((sum,o)=>{
+    const achieved=serviceOrders.filter(o=>{const date=productionDate(o);return date>=w.start_date&&date<=w.end_date&&o.status==="realizada";}).reduce((sum,o)=>{
       const items=o.items||[];
       if(items.length)return sum+items.reduce((s:any,i:any)=>{const t=i.service_type||serviceTypes.find((x:any)=>x.id===i.service_type_id);return s+(t?.unit==="m2"?Number(i.realized_quantity??0):0);},0);
       const t=o.service_type||serviceTypes.find((x:any)=>x.id===o.service_type_id);return sum+(t?.unit==="m2"?Number(o.realized_quantity??0):0);
