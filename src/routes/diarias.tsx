@@ -1013,6 +1013,28 @@ function DiariasPage() {
         </div>
       )}
 
+      {historicalMonthData.length > 0 ? (
+        <Card className="mt-4 p-3">
+          <p className="text-sm font-semibold">Diaristas desligados — pagamentos e histórico</p>
+          <p className="mb-3 text-xs text-muted-foreground">Abra o diarista para dar baixa em pagamentos pendentes, mesmo após o desligamento.</p>
+          <div className="space-y-2">
+            {historicalMonthData.map((item) => (
+              <button key={item.worker.id} type="button" onClick={() => setSelectedWorkerId(item.worker.id)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-border p-3 text-left">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">{item.worker.full_name}</p>
+                  <p className="text-xs text-muted-foreground">Desligado · {openRows(item.worker).length} diária(s) em aberto</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <strong className="text-sm">{brl(item.amount)}</strong>
+                  <ChevronRight className="size-4" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
       {monthData.some((item) => item.rows.length > 0) || historicalMonthData.length > 0 ? (
         <Card className="mt-4 p-3">
           <p className="text-sm font-semibold">Diárias lançadas em {monthTitle(month)}</p>
