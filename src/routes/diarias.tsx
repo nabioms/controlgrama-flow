@@ -212,7 +212,7 @@ function DiariasPage() {
 
   const historicalMonthData = useMemo(() => {
     if (!month) return [];
-    return buildMonthData(historicalDiaristas).filter((item) => item.rows.length > 0);
+    return buildMonthData(historicalDiaristas).filter((item) => item.rows.length > 0 || openRows(item.worker).length > 0 || payments.some((p) => p.worker_id === item.worker.id && p.status === "pendente"));
   }, [month, historicalDiaristas, attendanceByWorker, paymentPeriods, payments, bonusByWorker, workerAdvances]);
 
   // Funcionários fixos com registro de ponto ou pagamento referente ao mês selecionado.
@@ -262,7 +262,7 @@ function DiariasPage() {
     );
   };
 
-  const totalOpen = monthData.reduce((sum, row) => sum + row.amount, 0);
+  const totalOpen = [...monthData, ...historicalMonthData].reduce((sum, row) => sum + row.amount, 0);
   const fixedOpen = payments
     .filter((p) => p.status === "pendente" && workers.find((w) => w.id === p.worker_id)?.employment_type === "contratado")
     .reduce((sum, p) => sum + Number(p.gross_amount), 0);
@@ -280,7 +280,9 @@ function DiariasPage() {
     const bonusAmount = bonusRows.reduce((sum,b) => sum + Number(b.amount || 0), 0);
     const advanceBalance = workerAdvances.filter((a) => a.worker_id === selectedWorker.id && a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0);
     const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
-    const cycles = [{ ...next, start: earliest < next.end ? earliest : next.end }];
+    const today = toISO(new Date());
+    const manualEnd = today < next.end ? today : next.end;
+    const cycles = [{ ...next, end: manualEnd, start: earliest < manualEnd ? earliest : manualEnd }];
 
     const sumRows = (items: Attendance[]) => {
       const days = items.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
@@ -358,7 +360,7 @@ function DiariasPage() {
                 {selectedWorker.job_role} · {brl(selectedWorker.daily_rate ?? 0)} por dia
               </p>
             </div>
-            <Badge tone="success">ativo</Badge>
+            <Badge tone={selectedWorker.status === "desligado" ? "danger" : "success"}>{selectedWorker.status === "desligado" ? "desligado" : "ativo"}</Badge>
           </div>
         </Card>
 
@@ -395,6 +397,30 @@ function DiariasPage() {
           </Card>
         ) : null}
 
+        {payments.filter((p) => p.worker_id === selectedWorker.id && p.status === "pendente").length > 0 ? (
+          <Card className="mb-4 p-3">
+            <p className="mb-2 text-sm font-semibold">Pagamentos já fechados e pendentes</p>
+            {payments.filter((p) => p.worker_id === selectedWorker.id && p.status === "pendente").map((p) => {
+              const period = paymentPeriods.find((item) => item.id === p.period_id);
+              return <div key={p.id} className="mb-3 rounded-lg border border-border p-3">
+                <p className="text-xs font-semibold">{period?.label ?? "Pagamento"} · {brl(Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0)))}</p>
+                <p className="mb-2 text-xs text-muted-foreground">{period ? `${formatDate(period.start_date)} a ${formatDate(period.end_date)}` : "Período registrado"}</p>
+                <Button disabled={payingPaymentId === p.id} onClick={async () => {
+                  setPaymentError(null); setPayingPaymentId(p.id);
+                  try { await markPaymentPaid(p.id, paymentMethod); }
+                  catch (error) { setPaymentError(error instanceof Error ? error.message : "Erro ao dar baixa."); }
+                  finally { setPayingPaymentId(null); }
+                }}>Dar baixa agora ({paymentMethod.toUpperCase()})</Button>
+              </div>;
+            })}
+            <div className="flex gap-2">
+              {(["pix", "dinheiro", "transferencia"] as PaymentMethod[]).map((method) => (
+                <button key={method} type="button" onClick={() => setPaymentMethod(method)}
+                  className={`rounded-lg border px-2 py-1 text-xs ${paymentMethod === method ? "border-primary bg-primary/10" : "border-border"}`}>{method}</button>
+              ))}
+            </div>
+          </Card>
+        ) : null}
         <div className="mb-4 space-y-2">
           {detail.cycles.map((cycle) => {
             const period = paymentPeriods.find(
@@ -433,7 +459,7 @@ function DiariasPage() {
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-semibold text-amber-700">Pagamento ainda não fechado</p>
-                        <p className="text-[10px] text-muted-foreground">Gera o registro deste período para controlar a baixa.</p>
+                        <p className="text-[10px] text-muted-foreground">Você pode fechar agora, sem esperar o quinto dia útil.</p>
                       </div>
                       <Button
                         variant="soft"
