@@ -438,7 +438,7 @@ function DiariasPage() {
             const cyclePaid = workerPayment?.status === "pago";
             const cyclePending = workerPayment?.status === "pendente";
             const cycleGross = Number(cycle.grossAmount ?? cycle.amount);
-            const cycleAdvance = workerPayment ? Number(workerPayment.advance_amount || 0) : Number(cycle.advanceAmount || 0);
+            const cycleAdvance = cyclePaid ? Number(workerPayment?.advance_amount || 0) : Math.max(Number(workerPayment?.advance_amount || 0), Number(cycle.advanceAmount || 0));
             const cycleNet = Math.max(0, cycleGross - cycleAdvance);
             const advanceLabel = cyclePaid ? "Vale descontado" : workerPayment ? "Vale previsto" : "Vale a descontar";
 
