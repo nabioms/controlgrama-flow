@@ -298,7 +298,9 @@ function DiariasPage() {
     const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
     const today = toISO(new Date());
     const manualEnd = today < next.end ? today : next.end;
-    const cycles = [{ ...next, end: manualEnd, start: earliest < manualEnd ? earliest : manualEnd }];
+    const monthStart = `${month}-01`;
+    const monthEnd = toISO(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
+    const cycles = [{ ...next, end: monthEnd, start: monthStart }];
 
     const sumRows = (items: Attendance[]) => {
       const days = items.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
@@ -311,7 +313,7 @@ function DiariasPage() {
     const cycleData = cycles
       .map((cycle) => ({
         ...cycle,
-        rows: rows.filter((row) => row.date <= cycle.end),
+        rows: rows.filter((row) => row.date >= cycle.start && row.date <= cycle.end),
         bonusRows,
       }))
       .map((cycle) => ({
@@ -413,35 +415,6 @@ function DiariasPage() {
           </Card>
         ) : null}
 
-        {payments.filter((p) => p.worker_id === selectedWorker.id && p.status === "pendente").length > 0 ? (
-          <Card className="mb-4 p-3">
-            <p className="mb-2 text-sm font-semibold">Pagamentos já fechados e pendentes</p>
-            {payments.filter((p) => p.worker_id === selectedWorker.id && p.status === "pendente").map((p) => {
-              const period = paymentPeriods.find((item) => item.id === p.period_id);
-              return <div key={p.id} className="mb-3 rounded-lg border border-border p-3">
-                <p className="text-xs font-semibold">{period?.label ?? "Pagamento"} · {brl(Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0)))}</p>
-                <p className="mb-2 text-xs text-muted-foreground">{period ? `${formatDate(period.start_date)} a ${formatDate(period.end_date)}` : "Período registrado"}</p>
-                <Button disabled={payingPaymentId === p.id} onClick={async () => {
-                  setPaymentError(null); setPayingPaymentId(p.id);
-                  try {
-                    const net = Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0));
-                    if (net <= 0 || Math.abs(net - detail.totalAmount) > 0.01) throw new Error("O fechamento não confere com o saldo em aberto. Revise os valores antes de dar baixa.");
-                    if (!window.confirm(`Confirma pagamento de ${brl(net)} a ${selectedWorker.full_name} via ${paymentMethod.toUpperCase()}?`)) return;
-                    await markPaymentPaid(p.id, paymentMethod);
-                  }
-                  catch (error) { setPaymentError(error instanceof Error ? error.message : "Erro ao dar baixa."); }
-                  finally { setPayingPaymentId(null); }
-                }}>Dar baixa agora ({paymentMethod.toUpperCase()})</Button>
-              </div>;
-            })}
-            <div className="flex gap-2">
-              {(["pix", "dinheiro", "transferencia"] as PaymentMethod[]).map((method) => (
-                <button key={method} type="button" onClick={() => setPaymentMethod(method)}
-                  className={`rounded-lg border px-2 py-1 text-xs ${paymentMethod === method ? "border-primary bg-primary/10" : "border-border"}`}>{method}</button>
-              ))}
-            </div>
-          </Card>
-        ) : null}
         <div className="mb-4 space-y-2">
           {detail.cycles.map((cycle) => {
             const period = paymentPeriods.find(
