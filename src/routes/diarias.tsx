@@ -239,11 +239,27 @@ function DiariasPage() {
   }, [month, workers, attendanceByWorker, payments, paymentPeriods]);
 
   const renderMonthRecords = (worker: Worker, rows: Attendance[]) => {
-    const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
-    if (!sorted.length) return <p className="py-1 text-[11px] text-muted-foreground">Nenhuma diária lançada neste mês.</p>;
+    const advances = workerAdvances.filter((advance) => advance.worker_id === worker.id && advance.date.startsWith(month));
+    const entries = [
+      ...rows.map((row) => ({ date: row.date, kind: "diaria" as const, row })),
+      ...advances.map((advance) => ({ date: advance.date, kind: "vale" as const, advance })),
+    ].sort((a, b) => a.date.localeCompare(b.date) || (a.kind === "diaria" ? -1 : 1));
+    if (!entries.length) return <p className="py-1 text-[11px] text-muted-foreground">Nenhuma diária ou vale lançado neste mês.</p>;
     return (
       <div className="divide-y divide-border">
-        {sorted.map((row) => {
+        {entries.map((entry) => {
+          if (entry.kind === "vale") {
+            const advance = entry.advance;
+            return (
+              <div key={`vale-${advance.id}`} className="flex items-center justify-between gap-2 py-2 text-xs text-red-700 dark:text-red-400">
+                <span className="w-12 shrink-0 font-semibold">{formatDate(advance.date).slice(0, 5)}</span>
+                <span className="min-w-0 flex-1 font-semibold">Desconto de vale</span>
+                <span className="shrink-0 font-bold">− {brl(Number(advance.amount))}</span>
+                <span className="shrink-0 text-[10px]">{advance.status === "descontado" ? "Descontado" : "A descontar"}</span>
+              </div>
+            );
+          }
+          const row = entry.row;
           const status = rowPaymentStatus(worker.id, row);
           const fraction = Number(row.work_fraction ?? 1);
           const custom = row.daily_amount != null && String(row.daily_amount) !== "";
