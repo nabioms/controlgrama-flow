@@ -407,7 +407,12 @@ function DiariasPage() {
                 <p className="mb-2 text-xs text-muted-foreground">{period ? `${formatDate(period.start_date)} a ${formatDate(period.end_date)}` : "Período registrado"}</p>
                 <Button disabled={payingPaymentId === p.id} onClick={async () => {
                   setPaymentError(null); setPayingPaymentId(p.id);
-                  try { await markPaymentPaid(p.id, paymentMethod); }
+                  try {
+                    const net = Math.max(0, Number(p.gross_amount) - Number(p.advance_amount || 0));
+                    if (net <= 0 || Math.abs(net - detail.totalAmount) > 0.01) throw new Error("O fechamento não confere com o saldo em aberto. Revise os valores antes de dar baixa.");
+                    if (!window.confirm(`Confirma pagamento de ${brl(net)} a ${selectedWorker.full_name} via ${paymentMethod.toUpperCase()}?`)) return;
+                    await markPaymentPaid(p.id, paymentMethod);
+                  }
                   catch (error) { setPaymentError(error instanceof Error ? error.message : "Erro ao dar baixa."); }
                   finally { setPayingPaymentId(null); }
                 }}>Dar baixa agora ({paymentMethod.toUpperCase()})</Button>
@@ -523,6 +528,10 @@ function DiariasPage() {
                           setPaymentError(null);
                           setPayingPaymentId(workerPayment.id);
                           try {
+                            if (cycleNet <= 0 || Math.abs(cycleNet - detail.totalAmount) > 0.01) {
+                              throw new Error("O valor do fechamento não confere com o saldo em aberto. Não foi registrada nenhuma baixa.");
+                            }
+                            if (!window.confirm(`Confirma que pagou ${brl(cycleNet)} a ${selectedWorker.full_name} via ${paymentMethod.toUpperCase()}? Esta ação registra o pagamento.`)) return;
                             await markPaymentPaid(workerPayment.id, paymentMethod);
                           } catch (error) {
                             setPaymentError(error instanceof Error ? error.message : "Não foi possível registrar o pagamento.");
