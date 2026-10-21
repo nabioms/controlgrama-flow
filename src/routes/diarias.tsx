@@ -535,7 +535,41 @@ function DiariasPage() {
                       </Button>
                     </div>
                   ) : (
-                    <p className="text-[11px] text-muted-foreground">Sem lançamento de pagamento para este período.</p>
+                    <div>
+                      <p className="text-xs font-semibold text-amber-700">Diárias pendentes sem fechamento</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Registre agora as diárias em aberto, sem esperar o 5º dia útil.</p>
+                      <div className="mt-2 grid grid-cols-3 gap-1">
+                        {(["pix", "dinheiro", "transferencia"] as PaymentMethod[]).map((method) => (
+                          <button key={method} type="button" onClick={() => setPaymentMethod(method)}
+                            className={`rounded-lg border px-2 py-1.5 text-[10px] font-semibold ${paymentMethod === method ? "border-primary bg-primary-soft text-primary-deep" : "border-border"}`}>
+                            {method === "pix" ? "PIX" : method === "dinheiro" ? "Dinheiro" : "Transferência"}
+                          </button>
+                        ))}
+                      </div>
+                      <Button variant="primary" className="mt-2 w-full"
+                        disabled={Boolean(payingPaymentId) || cycle.rows.length === 0}
+                        onClick={async () => {
+                          const unpaid = cycle.rows.filter((row) => !rowPaymentStatus(selectedWorker.id, row).paid);
+                          if (!unpaid.length) return;
+                          const total = unpaid.reduce((sum, row) => sum + attendanceAmount(selectedWorker, row), 0);
+                          if (!window.confirm(`Confirmar pagamento de ${brl(total)} referente a ${unpaid.length} diária(s) via ${paymentMethod.toUpperCase()}?`)) return;
+                          setPaymentError(null);
+                          setPayingPaymentId("individual-batch");
+                          let completed = 0;
+                          try {
+                            for (const row of unpaid) {
+                              await markAttendancePaid(row.id, paymentMethod);
+                              completed++;
+                            }
+                          } catch (error) {
+                            setPaymentError(`${completed} de ${unpaid.length} diária(s) baixadas. ${error instanceof Error ? error.message : "Erro ao registrar pagamento."}`);
+                          } finally {
+                            setPayingPaymentId(null);
+                          }
+                        }}>
+                        {payingPaymentId === "individual-batch" ? "Registrando pagamentos..." : `Dar baixa agora — ${brl(cycle.rows.reduce((sum, row) => sum + attendanceAmount(selectedWorker, row), 0))}`}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </Card>
