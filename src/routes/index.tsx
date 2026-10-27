@@ -22,6 +22,10 @@ export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
+function productionDate(order: { completed_at?: string | null; service_date: string }) {
+  return order.completed_at ? toISO(new Date(order.completed_at)) : order.service_date;
+}
+
 function Dashboard() {
   const { workers, teams, attendance, payables, payments, paymentPeriods, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
   const today = toISO(new Date());
@@ -53,13 +57,13 @@ function Dashboard() {
     }, 0);
 
   const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
-  const monthProduction = serviceOrders.filter((o) => o.service_date.startsWith(month) && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
-  const todayProduction = serviceOrders.filter((o) => o.service_date === today && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
+  const monthProduction = serviceOrders.filter((o) => productionDate(o).startsWith(month) && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
+  const todayProduction = serviceOrders.filter((o) => productionDate(o) === today && o.status === "realizada").reduce((sum,o)=>sum+Number(o.realized_amount),0);
 
   // Produção física realizada no mês: somente O.S. concluídas/realizadas.
   // Mantemos roçada e Carpina Manual separados, mesmo ambos sendo medidos em m².
   const completedPhysical = serviceOrders
-    .filter((o) => o.status === "realizada" && o.service_date.startsWith(month))
+    .filter((o) => o.status === "realizada" && productionDate(o).startsWith(month))
     .reduce(
       (totals, order) => {
         const items = order.items ?? [];
