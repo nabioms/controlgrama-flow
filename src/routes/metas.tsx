@@ -63,7 +63,7 @@ function monthWeeks(month:string){
   return result;
 }
 
-function productionDate(o:any){return o.completed_at ? String(o.completed_at).slice(0,10) : o.service_date;}
+function productionDate(o:any){return o.completed_at ? iso(new Date(o.completed_at)) : o.service_date;}
 
 function productionForMonth(serviceOrders:any[],serviceTypes:any[],month:string){
   return serviceOrders.filter(o=>productionDate(o).startsWith(month)&&o.status==="realizada").reduce((sum,o)=>{
