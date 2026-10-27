@@ -9,7 +9,7 @@ export const BONUS_AMOUNT = 100;
 
 export function m2Realized(orders: ServiceOrder[], types: ServiceType[], start: string, end: string) {
   return orders
-    .filter((o) => o.service_date >= start && o.service_date <= end && o.status === "realizada")
+    .filter((o) => { const date = o.completed_at ? `${new Date(o.completed_at).getFullYear()}-${String(new Date(o.completed_at).getMonth()+1).padStart(2,"0")}-${String(new Date(o.completed_at).getDate()).padStart(2,"0")}` : o.service_date; return date >= start && date <= end && o.status === "realizada"; })
     .reduce((sum, o) => {
       const items = o.items || [];
       if (items.length)
