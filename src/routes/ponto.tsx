@@ -44,6 +44,7 @@ function PontoPage() {
   const [tab, setTab] = useState<"chamada" | "resumo">("chamada");
   const [actionError, setActionError] = useState<string | null>(null);
   const [expandedTeams, setExpandedTeams] = useState<Set<string>>(new Set());
+  const [dailyAmountDrafts, setDailyAmountDrafts] = useState<Record<string, string>>({});
 
   const active = workers.filter((w) => w.status !== "desligado");
   const dayRows = useMemo(
@@ -180,7 +181,10 @@ function PontoPage() {
                         const current = row?.status;
                         const fraction = Number(row?.work_fraction ?? 1);
                         const isDiarista = w.employment_type === "diarista";
-                        const todayAmount = isDiarista && current === "presente" ? (w.daily_rate ?? 0) * fraction : 0;
+                        const defaultAmount = (w.daily_rate ?? 0) * fraction;
+                        const savedAmount = row?.daily_amount != null ? Number(row.daily_amount) : defaultAmount;
+                        const amountDraft = dailyAmountDrafts[w.id] ?? String(savedAmount);
+                        const todayAmount = isDiarista && current === "presente" ? savedAmount : 0;
                         return (
                           <div key={w.id} className="card-surface p-3">
                             <div className="mb-2.5 flex items-center gap-3">
@@ -205,7 +209,7 @@ function PontoPage() {
                                   onClick={async () => {
                                     setActionError(null);
                                     try {
-                                      await setAttendanceStatus(w.id, date, key, notes, contractId, key === "presente" ? 1 : 0);
+                                      await setAttendanceStatus(w.id, date, key, notes, contractId, key === "presente" ? 1 : 0, key === "presente" && isDiarista ? Number(dailyAmountDrafts[w.id] ?? (w.daily_rate ?? 0)) : null);
                                     } catch (error) {
                                       setActionError(error instanceof Error ? error.message : "Não foi possível salvar a marcação.");
                                     }
@@ -230,14 +234,30 @@ function PontoPage() {
                               </button>
                             ) : null}
                             {actionError ? <p className="mt-2 text-[11px] font-medium text-destructive">{actionError}</p> : null}
-                            {isDiarista && current === "presente" ? (
-                              <div className="mt-2 grid grid-cols-2 gap-2">
-                                <button onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 1)} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 1 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}>
-                                  Dia integral · {brl(w.daily_rate ?? 0)}
-                                </button>
-                                <button onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 0.5)} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 0.5 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}>
-                                  ½ período · {brl((w.daily_rate ?? 0) * 0.5)}
-                                </button>
+                            {isDiarista ? (
+                              <div className="mt-3 space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+                                <Field label="Valor da diária neste dia (R$)">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    inputMode="decimal"
+                                    value={amountDraft}
+                                    onChange={(e) => setDailyAmountDrafts((current) => ({ ...current, [w.id]: e.target.value }))}
+                                    placeholder="Ex.: 150,00"
+                                  />
+                                </Field>
+                                <p className="text-[11px] text-muted-foreground">Edite o valor antes de marcar presença. O valor personalizado ficará salvo somente para esta data.</p>
+                                {current === "presente" ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 1, Number(dailyAmountDrafts[w.id] ?? (row?.daily_amount != null ? row.daily_amount : w.daily_rate ?? 0)))} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 1 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}>
+                                      Dia integral
+                                    </button>
+                                    <button onClick={() => setAttendanceStatus(w.id, date, "presente", notes, contractId, 0.5, Number(dailyAmountDrafts[w.id] ?? (row?.daily_amount != null ? row.daily_amount : (w.daily_rate ?? 0) * 0.5)))} className={`rounded-xl border px-3 py-2 text-xs font-semibold ${fraction === 0.5 ? "border-primary bg-primary-soft text-primary-deep" : "border-border text-muted-foreground"}`}>
+                                      ½ período
+                                    </button>
+                                  </div>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
