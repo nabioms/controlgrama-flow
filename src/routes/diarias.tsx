@@ -191,16 +191,29 @@ function DiariasPage() {
       (row) => row.date.startsWith(targetMonth) && isWorked(row),
     );
 
+  // A folha principal é sempre do mês selecionado. Pendências antigas continuam
+  // preservadas e podem ser consultadas/quitadas no histórico individual.
+  const bonusAmountForMonth = (workerId: string, targetMonth: string) =>
+    weeklyBonuses
+      .filter((bonus) => bonus.worker_id === workerId && bonus.status === "bonificado" && bonus.week_start.startsWith(targetMonth))
+      .reduce((sum, bonus) => sum + Number(bonus.amount || 0), 0);
+
   const buildMonthData = (workerList: Worker[]) =>
     workerList.map((worker) => {
       const rows = getMonthRows(worker, month);
+      const unpaidRows = openRows(worker).filter((row) => row.date.startsWith(month));
       const days = rows.reduce((sum, row) => sum + Number(row.work_fraction ?? 1), 0);
+      const monthlyBonus = bonusAmountForMonth(worker.id, month);
+      const monthlyAdvances = workerAdvances
+        .filter((advance) => advance.worker_id === worker.id && advance.date.startsWith(month) && advance.status !== "descontado")
+        .reduce((sum, advance) => sum + Math.max(0, Number(advance.amount) - Number(advance.deducted_amount || 0)), 0);
+      const monthlyGross = unpaidRows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) + monthlyBonus;
       return {
         worker,
         rows,
         days,
-        amount: (() => { const gross = openRows(worker).reduce((sum, row) => sum + attendanceAmount(worker, row), 0) + (bonusByWorker.get(worker.id) ?? 0); const advances = workerAdvances.filter((a) => a.worker_id === worker.id && a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0); return Math.max(0, Math.round((gross - Math.min(gross, advances)) * 100) / 100); })(),
-        bonusAmount: bonusByWorker.get(worker.id) ?? 0,
+        amount: Math.max(0, Math.round((monthlyGross - Math.min(monthlyGross, monthlyAdvances)) * 100) / 100),
+        bonusAmount: monthlyBonus,
         total: Math.round(rows.reduce((sum, row) => sum + attendanceAmount(worker, row), 0) * 100) / 100,
       };
     });
@@ -289,12 +302,13 @@ function DiariasPage() {
     const allRows = (attendanceByWorker.get(selectedWorker.id) ?? []).filter(
       (row) => row.date.startsWith(month),
     );
-    const rows = openRows(selectedWorker);
+    const allOpenRows = openRows(selectedWorker);
+    const rows = allOpenRows.filter((row) => row.date.startsWith(month));
     const rowMap = new Map(allRows.map((row) => [row.date, row]));
     const next = nextPayCycle();
-    const bonusRows = openBonusRows(selectedWorker);
+    const bonusRows = openBonusRows(selectedWorker).filter((bonus) => bonus.week_start.startsWith(month));
     const bonusAmount = bonusRows.reduce((sum,b) => sum + Number(b.amount || 0), 0);
-    const advanceBalance = workerAdvances.filter((a) => a.worker_id === selectedWorker.id && a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0);
+    const advanceBalance = workerAdvances.filter((a) => a.worker_id === selectedWorker.id && a.date.startsWith(month) && a.status !== "descontado").reduce((sum, a) => sum + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0);
     const earliest = [...rows].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? next.end;
     const today = toISO(new Date());
     const manualEnd = today < next.end ? today : next.end;
@@ -345,6 +359,7 @@ function DiariasPage() {
       monthAdvances: workerAdvances.filter(a=>a.worker_id===selectedWorker.id&&a.date.startsWith(month)),
       bonusAmount,
       byMonth: openByMonth(selectedWorker),
+      previousOpenRows: allOpenRows.filter((row) => !row.date.startsWith(month)),
       daysInMonth,
       firstWeekday,
     };
@@ -969,7 +984,7 @@ function DiariasPage() {
             <p className="text-sm font-semibold capitalize">{monthTitle(month)}</p>
           </div>
           <div className="text-right">
-            <p className="text-[10px] text-muted-foreground">Total de diárias em aberto</p>
+            <p className="text-[10px] text-muted-foreground">Total em aberto em {monthTitle(month)}</p>
             <p className="text-sm font-bold text-primary-deep">{brl(totalOpen)}</p>
             {fixedOpen > 0 ? <p className="text-[10px] text-muted-foreground">Fixos pendentes: {brl(fixedOpen)}</p> : null}
           </div>
@@ -1038,7 +1053,8 @@ function DiariasPage() {
                 <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
               </div>
               <p className="col-start-2 col-end-4 text-[10px] leading-4 text-muted-foreground">
-                Em aberto (todos os meses) · {brl(item.total)} em {monthTitle(month).split(" ")[0]}
+                Em aberto neste mês · {brl(item.amount)}
+                {openRows(item.worker).some((row) => !row.date.startsWith(month)) ? " · há pendências anteriores no histórico" : ""}
               </p>
             </button>
           ))}
