@@ -12,7 +12,7 @@ interface Store {
   saveBonusSettings:(input:{enabled:boolean;amount:number;requirePresence:boolean})=>Promise<void>;
   nextPayDate: {date:string;label:string;days:number}; cashBalance:number; loading:boolean; error:string|null;
   refresh:()=>Promise<void>; addWorker:(w:Worker,teamId?:string|null)=>Promise<void>; updateWorker:(id:string,patch:Partial<Worker>)=>Promise<void>; deleteWorker:(id:string)=>Promise<void>; updateWorkerEpi:(id:string,patch:Partial<Pick<WorkerEpi,"delivered"|"returned"|"delivered_at"|"returned_at">>)=>Promise<void>;
-  setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction?:number)=>Promise<void>;
+  setAttendanceStatus:(workerId:string,date:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction?:number,dailyAmount?:number|null)=>Promise<void>;
   markAttendancePaid:(id:string,m:PaymentMethod)=>Promise<void>; updateAttendanceAmount:(id:string,amount:number)=>Promise<void>;
   deleteAttendance:(id:string)=>Promise<void>;
   closePeriod:(id:string)=>Promise<void>; closePaymentCycle:(input:{cycle:PaymentPeriod["cycle"];label:string;start_date:string;end_date:string;pay_date:string})=>Promise<void>; markPaymentPaid:(id:string,m:PaymentMethod)=>Promise<void>;
@@ -176,9 +176,10 @@ export function StoreProvider({children}:{children:ReactNode}){
   await refresh();
  },[refresh]);
  const updateWorkerEpi=useCallback(async(id:string,patch:Partial<Pick<WorkerEpi,"delivered"|"returned"|"delivered_at"|"returned_at">>)=>{const {data,error}=await supabase.from("worker_epis").update({...patch,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();if(error)throw error;setWorkerEpis(x=>x.map(e=>e.id===id?data as WorkerEpi:e));},[]);
- const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction=1)=>{
+ const setAttendanceStatus=useCallback(async(workerId:string,dateValue:string,status:AttendanceStatus,notes:string,contractId:string|null,workFraction=1,dailyAmount?:number|null)=>{
   const fraction=status==="presente"?workFraction:0;
-  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null,paid_at:null,payment_method:null,daily_amount:null},{onConflict:"worker_id,date"}).select("*").single();
+  if(status==="presente" && dailyAmount != null && (!Number.isFinite(dailyAmount) || dailyAmount < 0)) throw new Error("Informe um valor válido para a diária.");
+  const {data,error}=await supabase.from("attendance").upsert({worker_id:workerId,date:dateValue,status,work_fraction:fraction,notes:notes||null,contract_id:contractId||null,paid_at:null,payment_method:null,daily_amount:status==="presente" && dailyAmount != null ? Math.round(dailyAmount*100)/100 : null},{onConflict:"worker_id,date"}).select("*").single();
   if(error)throw error;
   setAttendance(x=>[data,...x.filter(a=>!(a.worker_id===workerId&&a.date===dateValue))]);
 },[]);
