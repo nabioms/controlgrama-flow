@@ -42,6 +42,10 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # "tools" foi removido do repositório oficial do Android SDK.
+          # Instala apenas platform-tools; o Gradle resolve a plataforma/build-tools exigidos pelo Capacitor 8.
+          packages: platform-tools
 
       - name: Generate Android project if needed
         shell: bash
