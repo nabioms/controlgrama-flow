@@ -42,12 +42,20 @@ function Dashboard() {
   // Registros antigos de funcionários desligados não devem aparecer na chamada de hoje.
   const dayRows = attendance.filter((a) => a.date === today && activeWorkerIds.has(a.worker_id));
 
-  // Total em aberto: todas as diárias trabalhadas e não pagas, de qualquer mês, até a véspera do 5º dia útil.
+  // Próximo pagamento: considera somente diárias do mês atual até a data de fechamento.
+  // Pendências de meses anteriores permanecem no histórico de Diárias e não contaminam
+  // a previsão do mês corrente no Dashboard.
   const estimated = workers
     .filter((w) => w.employment_type === "diarista")
     .reduce((sum, w) => {
       const open = attendance.filter((a) => {
-        if (a.worker_id !== w.id || a.status !== "presente" || a.paid_at || a.date > closureDate) return false;
+        if (
+          a.worker_id !== w.id ||
+          a.status !== "presente" ||
+          a.paid_at ||
+          !a.date.startsWith(month) ||
+          a.date > closureDate
+        ) return false;
         return !paymentPeriods.some((p) => a.date >= p.start_date && a.date <= p.end_date && payments.some((x) => x.period_id === p.id && x.worker_id === w.id && x.status === "pago"));
       });
       return sum + open.reduce((s, a) => {
