@@ -151,17 +151,17 @@ export function BonusHistory() {
   );
 }
 
-export function DashboardBonus() {
+export function DashboardBonus({ month }: { month?: string }) {
   const evals = useBonusEvaluations();
-  const month = toISO(new Date()).slice(0, 7);
-  const monthWeeks = evals.filter((w) => w.week.start_date.startsWith(month));
+  const selectedMonth = month ?? toISO(new Date()).slice(0, 7);
+  const monthWeeks = evals.filter((w) => w.week.start_date.startsWith(selectedMonth));
   const total = monthWeeks.reduce((s, w) => s + w.total, 0);
   const met = monthWeeks.filter((w) => w.goalMet).length;
   const awarded = new Set(monthWeeks.flatMap((w) => w.workers.filter((e) => e.amount > 0).map((e) => e.worker.id))).size;
-  const byWorker = bonusByWorker(evals).slice(0, 6);
+  const byWorker = bonusByWorker(monthWeeks).slice(0, 6);
   return (
     <Card className="mb-4">
-      <SectionTitle title="Bônus de metas" hint="Mês atual" />
+      <SectionTitle title="Bônus de metas" hint={monthName(selectedMonth)} />
       <div className="mb-3 grid grid-cols-3 gap-2">
         <StatCard label="Bônus no mês" value={brl(total)} tone="success" icon={<Award className="size-4" />} />
         <StatCard label="Metas batidas" value={String(met)} tone="info" icon={<Award className="size-4" />} />
