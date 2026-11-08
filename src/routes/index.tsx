@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { AlertTriangle, ArrowRight, CalendarClock, Ruler, Users, ClipboardList } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Badge, Card, ProgressBar, SectionTitle, StatCard } from "@/components/ui-kit";
@@ -29,7 +30,9 @@ function productionDate(order: { completed_at?: string | null; service_date: str
 function Dashboard() {
   const { workers, teams, attendance, payables, payments, paymentPeriods, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
   const today = toISO(new Date());
-  const month = today.slice(0, 7);
+  const currentMonth = today.slice(0, 7);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+  const month = selectedMonth;
   const closureDate = (() => { const d = new Date(`${nextPayDate.date}T12:00:00`); d.setDate(d.getDate() - 1); return toISO(d); })();
 
   const active = workers.filter((w) => w.status === "ativo");
@@ -53,7 +56,7 @@ function Dashboard() {
           a.worker_id !== w.id ||
           a.status !== "presente" ||
           a.paid_at ||
-          !a.date.startsWith(month) ||
+          !a.date.startsWith(currentMonth) ||
           a.date > closureDate
         ) return false;
         return !paymentPeriods.some((p) => a.date >= p.start_date && a.date <= p.end_date && payments.some((x) => x.period_id === p.id && x.worker_id === w.id && x.status === "pago"));
@@ -117,6 +120,18 @@ function Dashboard() {
 
   return (
     <AppShell title="Painel geral" subtitle={formatLongDate(today)}>
+      <Card className="mb-4">
+        <label htmlFor="dashboard-month" className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Consultar resultados do mês</label>
+        <input
+          id="dashboard-month"
+          type="month"
+          value={selectedMonth}
+          max={currentMonth}
+          onChange={(event) => setSelectedMonth(event.target.value)}
+          className="w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm font-semibold text-foreground"
+        />
+        {selectedMonth !== currentMonth ? <p className="mt-2 text-xs text-muted-foreground">Visualizando o histórico de {new Date(`${selectedMonth}-15T12:00:00`).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}. Os indicadores de hoje e o próximo pagamento continuam mostrando o mês atual.</p> : <p className="mt-2 text-xs text-muted-foreground">Selecione um mês anterior para consultar os resultados históricos.</p>}
+      </Card>
       <div className="mb-4 grid grid-cols-2 gap-2.5">
         <StatCard label="Produção hoje" value={brl(todayProduction)} sub="O.S. realizadas" tone="success" icon={<ClipboardList className="size-4" />} />
         <StatCard label="Produção no mês" value={brl(monthProduction)} sub="O.S. realizadas" tone="info" icon={<ClipboardList className="size-4" />} />
@@ -256,7 +271,7 @@ function Dashboard() {
           </div>
         ))}
       </div>
-      <DashboardBonus />
+      <DashboardBonus month={month} />
     </AppShell>
   );
 }
