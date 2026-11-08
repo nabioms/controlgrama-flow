@@ -80,30 +80,48 @@ export function StoreProvider({children}:{children:ReactNode}){
    setError(errors.map(x=>x.error?.message||"Erro ao carregar dados").join(" | "));
   }
   const [pr,w,c,cat,inv,docs,events,epis,att,periods,pay,allowances,rec,pb,settings,tm,st,so,pg,pgw,bs,wa]=q;
-  setRole((pr.data?.role as UserRole)||"encarregado");setWorkers((w.data||[]).map(worker));setContracts(c.data||[]);setExpenseCategories(cat.data||[]);
-  setInvoices(inv.data||[]);setWorkerDocuments(docs.data||[]);setWorkerEvents(events.data||[]);setWorkerEpis((epis.data||[]) as WorkerEpi[]);setAttendance(att.data||[]);setPaymentPeriods(periods.data||[]);
-  setPayments((pay.data||[]).map(payment));setDailyAllowances((allowances.data||[]) as DailyAllowance[]);setWorkerAdvances(((wa.data||[]) as WorkerAdvance[]).map(a=>({...a,amount:Number(a.amount),deducted_amount:Number(a.deducted_amount||0)})));setReceivables((rec.data||[]).map(receivable));setPayables((pb.data||[]).map(payable));
-   const workerRows=(w.data||[]).map(worker);
+  // Uma consulta com erro não pode apagar os dados já carregados no estado.
+  // Atualiza cada conjunto somente quando sua própria consulta foi concluída com sucesso.
+  if(!pr.error) setRole((pr.data?.role as UserRole)||"encarregado");
+  if(!w.error) setWorkers((w.data||[]).map(worker));
+  if(!c.error) setContracts(c.data||[]);
+  if(!cat.error) setExpenseCategories(cat.data||[]);
+  if(!inv.error) setInvoices(inv.data||[]);
+  if(!docs.error) setWorkerDocuments(docs.data||[]);
+  if(!events.error) setWorkerEvents(events.data||[]);
+  if(!epis.error) setWorkerEpis((epis.data||[]) as WorkerEpi[]);
+  if(!att.error) setAttendance(att.data||[]);
+  if(!periods.error) setPaymentPeriods(periods.data||[]);
+  if(!pay.error) setPayments((pay.data||[]).map(payment));
+  if(!allowances.error) setDailyAllowances((allowances.data||[]) as DailyAllowance[]);
+  if(!wa.error) setWorkerAdvances(((wa.data||[]) as WorkerAdvance[]).map(a=>({...a,amount:Number(a.amount),deducted_amount:Number(a.deducted_amount||0)})));
+  if(!rec.error) setReceivables((rec.data||[]).map(receivable));
+  if(!pb.error) setPayables((pb.data||[]).map(payable));
+  const workerRows=(w.data||[]).map(worker);
   const teamRows:any[]=tm.data||[];
-  setTeams(teamRows.map(t=>({...t,foreman:workerRows.find(x=>x.id===t.foreman_worker_id)||null,members:(t.team_members||[]).map((m:any)=>workerRows.find(x=>x.id===m.worker_id)||m.worker).filter(Boolean)})) as Team[]);
+  if(!tm.error && !w.error) setTeams(teamRows.map(t=>({...t,foreman:workerRows.find(x=>x.id===t.foreman_worker_id)||null,members:(t.team_members||[]).map((m:any)=>workerRows.find(x=>x.id===m.worker_id)||m.worker).filter(Boolean)})) as Team[]);
   const teamMap=new Map(teamRows.map(t=>[t.id,t]));
-  setServiceTypes((st.data||[]) as ServiceType[]);
-  setServiceOrders((so.data||[]).map((o:any)=>({...o,team:o.team_id?(teamMap.get(o.team_id)||o.team):o.team,items:(o.service_order_items||[]).map((i:any)=>({...i,service_type:i.service_type||null}))})) as ServiceOrder[]);
-  setProductionGoals((pg.data||[]) as ProductionGoal[]);
-  setProductionGoalWeeks((pgw.data||[]) as ProductionGoalWeek[]);
-  setBonusAmount(Number(bs.data?.amount ?? 100));setBonusEnabled(bs.data?.enabled !== false);setBonusRequirePresence(bs.data?.require_presence !== false);
+  if(!st.error) setServiceTypes((st.data||[]) as ServiceType[]);
+  if(!so.error) setServiceOrders((so.data||[]).map((o:any)=>({...o,team:o.team_id?(teamMap.get(o.team_id)||o.team):o.team,items:(o.service_order_items||[]).map((i:any)=>({...i,service_type:i.service_type||null}))})) as ServiceOrder[]);
+  if(!pg.error) setProductionGoals((pg.data||[]) as ProductionGoal[]);
+  if(!pgw.error) setProductionGoalWeeks((pgw.data||[]) as ProductionGoalWeek[]);
+  if(!bs.error){setBonusAmount(Number(bs.data?.amount ?? 100));setBonusEnabled(bs.data?.enabled !== false);setBonusRequirePresence(bs.data?.require_presence !== false);}
   // Bônus: consulta separada para não bloquear o app se a tabela ainda não foi criada.
   const wb=await fetchAll(()=>supabase.from("weekly_goal_bonuses").select("*").order("week_start",{ascending:false}).order("id"));
   setBonusTableMissing(!!wb.error);
-  setWeeklyBonuses(((wb.data||[]) as any[]).map(b=>({...b,week_start:date(b.week_start),week_end:date(b.week_end),paid_at:date(b.paid_at),amount:Number(b.amount)})) as WeeklyGoalBonus[]);
-  const flowMap:Record<string,{month:string;inflow:number;outflow:number}>={};
-  (rec.data||[]).filter((x:any)=>x.status==="recebido").forEach((x:any)=>{const m=String(x.received_at||x.expected_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].inflow+=Number(x.expected_amount||0)});
-  (pb.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.due_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
-  (allowances.data||[]).forEach((x:any)=>{const m=String(x.paid_at||x.date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
-  (wa.data||[]).forEach((x:any)=>{const m=String(x.date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
-  (pay.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.created_at).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.gross_amount||0)});
-  setCashFlowHistory(Object.values(flowMap).sort((a,b)=>a.month.localeCompare(b.month)));
-  setOpeningBalance(Number(settings.data?.opening_balance||0));setLoading(false);
+  if(!wb.error) setWeeklyBonuses(((wb.data||[]) as any[]).map(b=>({...b,week_start:date(b.week_start),week_end:date(b.week_end),paid_at:date(b.paid_at),amount:Number(b.amount)})) as WeeklyGoalBonus[]);
+  // Não substitui o histórico financeiro se alguma das fontes usadas falhou.
+  if(!rec.error && !pb.error && !allowances.error && !wa.error && !pay.error){
+    const flowMap:Record<string,{month:string;inflow:number;outflow:number}>={};
+    (rec.data||[]).filter((x:any)=>x.status==="recebido").forEach((x:any)=>{const m=String(x.received_at||x.expected_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].inflow+=Number(x.expected_amount||0)});
+    (pb.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.due_date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
+    (allowances.data||[]).forEach((x:any)=>{const m=String(x.paid_at||x.date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
+    (wa.data||[]).forEach((x:any)=>{const m=String(x.date).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.amount||0)});
+    (pay.data||[]).filter((x:any)=>x.status==="pago").forEach((x:any)=>{const m=String(x.paid_at||x.created_at).slice(0,7);flowMap[m]??={month:m,inflow:0,outflow:0};flowMap[m].outflow+=Number(x.gross_amount||0)});
+    setCashFlowHistory(Object.values(flowMap).sort((a,b)=>a.month.localeCompare(b.month)));
+  }
+  if(!settings.error) setOpeningBalance(Number(settings.data?.opening_balance||0));
+  setLoading(false);
  },[]);
  useEffect(()=>{refresh()},[refresh]);
 
