@@ -39,7 +39,7 @@ export function AppShell({
   subtitle?: string;
   children: ReactNode;
 }) {
-  const { role } = useStore();
+  const { role, error, refresh, loading } = useStore();
   const [accountOpen, setAccountOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
@@ -180,7 +180,18 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-5">{children}</main>
+      <main className="mx-auto max-w-3xl px-4 py-5">
+        {error ? (
+          <div role="alert" className="mb-4 rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+            <p className="font-semibold text-destructive">Algumas informações não puderam ser atualizadas.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Seus registros salvos não foram apagados. Verifique a conexão e tente carregar novamente.</p>
+            <button type="button" disabled={loading} onClick={() => void refresh()} className="mt-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">
+              {loading ? "Atualizando..." : "Tentar carregar novamente"}
+            </button>
+          </div>
+        ) : null}
+        {children}
+      </main>
 
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur"
