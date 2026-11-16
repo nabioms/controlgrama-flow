@@ -28,7 +28,7 @@ function productionDate(order: { completed_at?: string | null; service_date: str
 }
 
 function Dashboard() {
-  const { workers, teams, attendance, payables, payments, paymentPeriods, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
+  const { workers, teams, attendance, payables, payments, paymentPeriods, workerAdvances, weeklyBonuses, nextPayDate, contracts, workerDocuments, serviceOrders, serviceTypes } = useStore();
   const today = toISO(new Date());
   const currentMonth = today.slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState(currentMonth);
@@ -45,26 +45,37 @@ function Dashboard() {
   // Registros antigos de funcionários desligados não devem aparecer na chamada de hoje.
   const dayRows = attendance.filter((a) => a.date === today && activeWorkerIds.has(a.worker_id));
 
-  // Próximo pagamento: considera somente diárias do mês atual até a data de fechamento.
-  // Pendências de meses anteriores permanecem no histórico de Diárias e não contaminam
-  // a previsão do mês corrente no Dashboard.
+  // Próximo pagamento: usa a mesma regra da folha de Diárias para o mês atual.
+  // Soma apenas diárias ainda não pagas, acrescenta bônus pendentes e desconta
+  // o saldo de vales ainda não abatido. Assim o Dashboard acompanha a folha.
   const estimated = workers
     .filter((w) => w.employment_type === "diarista")
     .reduce((sum, w) => {
-      const open = attendance.filter((a) => {
+      const openRows = attendance.filter((a) => {
         if (
           a.worker_id !== w.id ||
           a.status !== "presente" ||
           a.paid_at ||
-          !a.date.startsWith(currentMonth) ||
-          a.date > closureDate
+          !a.date.startsWith(currentMonth)
         ) return false;
-        return !paymentPeriods.some((p) => a.date >= p.start_date && a.date <= p.end_date && payments.some((x) => x.period_id === p.id && x.worker_id === w.id && x.status === "pago"));
+        return !paymentPeriods.some((p) =>
+          a.date >= p.start_date &&
+          a.date <= p.end_date &&
+          payments.some((x) => x.period_id === p.id && x.worker_id === w.id && x.status === "pago")
+        );
       });
-      return sum + open.reduce((s, a) => {
+      const dailyGross = openRows.reduce((s, a) => {
         const custom = a.daily_amount == null || String(a.daily_amount) === "" ? NaN : Number(a.daily_amount);
         return s + (Number.isFinite(custom) ? custom : Number(w.daily_rate ?? 0) * Number(a.work_fraction ?? 1));
       }, 0);
+      const bonusGross = weeklyBonuses
+        .filter((b) => b.worker_id === w.id && b.status === "bonificado" && b.week_start.startsWith(currentMonth))
+        .reduce((s, b) => s + Number(b.amount || 0), 0);
+      const advanceBalance = workerAdvances
+        .filter((a) => a.worker_id === w.id && a.date.startsWith(currentMonth) && a.status !== "descontado")
+        .reduce((s, a) => s + Math.max(0, Number(a.amount) - Number(a.deducted_amount || 0)), 0);
+      const gross = dailyGross + bonusGross;
+      return sum + Math.max(0, Math.round((gross - Math.min(gross, advanceBalance)) * 100) / 100);
     }, 0);
 
   const monthPayables = payables.filter((p) => p.status === "pendente" && p.due_date.startsWith(month));
