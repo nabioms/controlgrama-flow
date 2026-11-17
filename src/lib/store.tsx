@@ -218,6 +218,37 @@ export function StoreProvider({children}:{children:ReactNode}){
   const paidAt=toISO(new Date());
   const {data,error}=await supabase.from("attendance").update({paid_at:paidAt,payment_method:m,updated_at:new Date().toISOString()}).eq("id",id).select("*").single();
   if(error)throw error;
+
+  // Baixa individual de diária também quita os vales retidos nesse pagamento.
+  // Distribui o valor da diária entre os vales mais antigos, sem permitir desconto duplicado.
+  const paidWorker=workers.find(w=>w.id===current.worker_id);
+  if(paidWorker){
+    let amountToAllocate=Math.round(attendanceAmount(current,paidWorker)*100)/100;
+    if(amountToAllocate>0){
+      const {data:advances,error:advanceError}=await supabase
+        .from("worker_advances")
+        .select("*")
+        .eq("worker_id",current.worker_id)
+        .in("status",["pendente","parcial"])
+        .order("date",{ascending:true})
+        .order("created_at",{ascending:true});
+      if(advanceError)throw advanceError;
+      for(const advance of advances||[]){
+        if(amountToAllocate<=0)break;
+        const remaining=Math.max(0,Number(advance.amount)-Number(advance.deducted_amount||0));
+        const deduction=Math.min(remaining,amountToAllocate);
+        if(deduction<=0)continue;
+        const deducted=Math.round((Number(advance.deducted_amount||0)+deduction)*100)/100;
+        const {error:deductError}=await supabase
+          .from("worker_advances")
+          .update({deducted_amount:deducted,status:deducted>=Number(advance.amount)?"descontado":"parcial",updated_at:new Date().toISOString()})
+          .eq("id",advance.id);
+        if(deductError)throw deductError;
+        amountToAllocate=Math.round((amountToAllocate-deduction)*100)/100;
+      }
+    }
+  }
+
   const cycle=paymentPeriods.find(p=>current.date>=p.start_date&&current.date<=p.end_date);
   if(cycle){
     const worker=workers.find(w=>w.id===current.worker_id);
