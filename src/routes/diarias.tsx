@@ -118,7 +118,11 @@ function DiariasPage() {
 
   const attendanceAmount = (worker: Worker, row: Attendance) => {
     const custom = row.daily_amount == null || String(row.daily_amount) === "" ? NaN : Number(row.daily_amount);
-    return Number.isFinite(custom) ? custom : Number(worker.daily_rate ?? 0) * Number(row.work_fraction ?? 1);
+    const fraction = Number(row.work_fraction ?? 1);
+    const dailyRate = Number(worker.daily_rate ?? 0);
+    // Um valor personalizado igual à diária integral é legado quando o registro foi convertido para meio período.
+    const staleFullDayAmount = fraction === 0.5 && Number.isFinite(custom) && Math.abs(custom - dailyRate) < 0.005;
+    return Number.isFinite(custom) && !staleFullDayAmount ? custom : dailyRate * fraction;
   };
 
   const attendanceByWorker = useMemo(() => {
@@ -679,7 +683,7 @@ function DiariasPage() {
               const row = detail.rowMap.get(iso);
               const fraction = Number(row?.work_fraction ?? 1);
               const worked = isWorked(row);
-              const absent = row?.status === "falta";
+              const absent = Boolean(row && row.status !== "presente");
               const amount = worked ? attendanceAmount(selectedWorker, row!) : 0;
               const paidDay = Boolean(row && worked && rowPaymentStatus(selectedWorker.id, row).paid);
 
@@ -687,7 +691,7 @@ function DiariasPage() {
                 <button
                   key={iso}
                   type="button"
-                  onClick={() => { setEditingDate(iso); setDailyAmountInput(row?.daily_amount != null ? String(row.daily_amount) : String((selectedWorker.daily_rate ?? 0) * fraction)); setDeleteError(null); }}
+                  onClick={() => { setEditingDate(iso); setDailyAmountInput(row ? String(attendanceAmount(selectedWorker, row)) : String((selectedWorker.daily_rate ?? 0) * fraction)); setDeleteError(null); }}
                   className={`min-h-14 min-w-0 overflow-hidden rounded-lg border p-1.5 text-left ${
                     worked
                       ? paidDay
@@ -717,7 +721,7 @@ function DiariasPage() {
                       </>
                     )
                   ) : absent ? (
-                    <p className="mt-2 truncate text-[9px] font-bold text-destructive">Falta</p>
+                    <p className="mt-2 truncate text-[9px] font-bold text-destructive">{row?.status === "falta_justificada" ? "Justificada" : row?.status === "atestado" ? "Atestado" : "Falta"}</p>
                   ) : (
                     <p className="mt-2 text-[9px] text-muted-foreground">—</p>
                   )}
