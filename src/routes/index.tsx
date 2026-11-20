@@ -66,7 +66,10 @@ function Dashboard() {
       });
       const dailyGross = openRows.reduce((s, a) => {
         const custom = a.daily_amount == null || String(a.daily_amount) === "" ? NaN : Number(a.daily_amount);
-        return s + (Number.isFinite(custom) ? custom : Number(w.daily_rate ?? 0) * Number(a.work_fraction ?? 1));
+        const fraction = Number(a.work_fraction ?? 1);
+        const dailyRate = Number(w.daily_rate ?? 0);
+        const staleFullDayAmount = fraction === 0.5 && Number.isFinite(custom) && Math.abs(custom - dailyRate) < 0.005;
+        return s + (Number.isFinite(custom) && !staleFullDayAmount ? custom : dailyRate * fraction);
       }, 0);
       const bonusGross = weeklyBonuses
         .filter((b) => b.worker_id === w.id && b.status === "bonificado" && b.week_start.startsWith(currentMonth))
