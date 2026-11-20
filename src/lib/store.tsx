@@ -208,8 +208,12 @@ export function StoreProvider({children}:{children:ReactNode}){
   setAttendance(x=>x.map(a=>a.id===id?data as Attendance:a));
  },[]);
  const attendanceAmount=(row:Attendance,worker:Worker)=>{
-  const custom=Number(row.daily_amount);
-  return Number.isFinite(custom) ? custom : Number(worker.daily_rate||0)*Number(row.work_fraction??1);
+  const custom=row.daily_amount==null||String(row.daily_amount)===""?NaN:Number(row.daily_amount);
+  const fraction=Number(row.work_fraction??1);
+  const dailyRate=Number(worker.daily_rate||0);
+  // Evita manter como meio período um valor legado igual à diária integral.
+  const staleFullDayAmount=fraction===0.5&&Number.isFinite(custom)&&Math.abs(custom-dailyRate)<0.005;
+  return Number.isFinite(custom)&&!staleFullDayAmount?custom:dailyRate*fraction;
  };
  const markAttendancePaid=useCallback(async(id:string,m:PaymentMethod)=>{
   const current=attendance.find(a=>a.id===id);
